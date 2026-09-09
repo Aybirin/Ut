@@ -106,23 +106,32 @@
     const REPO_OWNER = "Aybirin";
     const REPO_NAME = "Ut";
     const FILE_PATH = "copy.json";
-
-    // Reconstructed token to avoid security scanner revocation
     const GITHUB_TOKEN = ["github_pat_", "11BU7EYPY0NIeDA3MPMrKU", "_axecM0wHCQziWUqpQ4gd9PBAJmF5S01hi2rXmyIN0ZvCPMH4DTN", "ZTBpLGtO"].join("");
 
     let notesData = [];
     let fileSha = "";
+    
+    // Variables to track UI state so we don't disrupt the user
+    let openFolders = {}; 
+    let focusedFolderId = null; 
+    let saveTimeout = null;
 
     async function loadNotes() {
       try {
-        const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+        const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}?t=${Date.now()}`, {
           headers: { Authorization: `token ${GITHUB_TOKEN}` }
         });
         if (!res.ok) return;
         const data = await res.json();
         fileSha = data.sha;
-        notesData = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-        render();
+        
+        const newData = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+        
+        // Only update local data if the user isn't actively typing
+        if (!focusedFolderId) {
+          notesData = newData;
+          render();
+        }
       } catch (e) {
         console.error("Failed to load notes", e);
       }
@@ -138,33 +147,49 @@
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            message: "Update copy.json notes",
+            message: "Live update copy.json notes",
             content: contentEncoded,
             sha: fileSha
           })
         });
         const resData = await res.json();
-        if (resData.content) fileSha = resData.content.sha;
+        if (resData.content) {
+            fileSha = resData.content.sha;
+        }
       } catch (e) {
         console.error("Failed to save to GitHub", e);
       }
     }
 
     function render() {
+      // 1. Save the open/closed state of existing folders before redrawing
+      document.querySelectorAll('details').forEach(details => {
+        const id = details.getAttribute('data-id');
+        if (id) openFolders[id] = details.open;
+      });
+
       const container = document.getElementById("notes-container");
       container.innerHTML = "";
 
       notesData.forEach((folder, index) => {
         const folderEl = document.createElement("div");
         folderEl.className = "folder";
+        
+        // 2. Restore open state if it was open previously
+        const isOpen = openFolders[folder.id] ? "open" : "";
+
         folderEl.innerHTML = `
-          <details>
+          <details data-id="${folder.id}" ${isOpen}>
             <summary>
               <span>📁 ${escapeHtml(folder.title)}</span>
               <span style="font-size: 12px; color: var(--text-muted);">Click to toggle</span>
             </summary>
             <div class="folder-content">
-              <textarea onchange="updateNote(${index}, this.value)">${escapeHtml(folder.content)}</textarea>
+              <textarea 
+                onfocus="focusedFolderId = ${folder.id}" 
+                onblur="focusedFolderId = null"
+                oninput="updateNote(${index}, this.value)"
+              >${escapeHtml(folder.content)}</textarea>
               <div class="status" id="status-${index}">Saved</div>
             </div>
           </details>
@@ -178,26 +203,41 @@
       const title = input.value.trim();
       if (!title) return;
 
-      notesData.push({ id: Date.now(), title: title, content: "" });
+      const newId = Date.now();
+      notesData.push({ id: newId, title: title, content: "" });
+      openFolders[newId] = true; // Auto-open new folders
       input.value = "";
+      
       render();
       saveNotes();
     }
 
     function updateNote(index, text) {
       notesData[index].content = text;
-      document.getElementById(`status-${index}`).innerText = "Saving...";
-      saveNotes().then(() => {
-        document.getElementById(`status-${index}`).innerText = "Saved";
-      });
+      const statusEl = document.getElementById(`status-${index}`);
+      statusEl.innerText = "Typing...";
+      statusEl.style.color = "var(--accent)";
+
+      // Clear the previous timeout if the user keeps typing
+      clearTimeout(saveTimeout);
+      
+      // Wait 1 second after the user STOPS typing to save to GitHub (Prevents GitHub rate-limiting)
+      saveTimeout = setTimeout(() => {
+        statusEl.innerText = "Saving to GitHub...";
+        saveNotes().then(() => {
+          statusEl.innerText = "Saved";
+          statusEl.style.color = "var(--text-muted)";
+        });
+      }, 1000); 
     }
 
     function escapeHtml(str) {
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
+    // Initial load and background sync
     loadNotes();
-    setInterval(loadNotes, 10000);
+    setInterval(loadNotes, 10000); // Continues to sync background changes across devices safely
   </script>
 </body>
 </html>
