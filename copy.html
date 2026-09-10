@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +12,17 @@
       --text: #e0e0e0;
       --text-muted: #a0a0a0;
       --accent: #bb86fc;
+      --editor-bg: #1a1a1a;
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f5f7;
+      --card-bg: #ffffff;
+      --border: #e0e0e0;
+      --text: #1d1d1f;
+      --text-muted: #86868b;
+      --accent: #0066cc;
+      --editor-bg: #fafafa;
     }
 
     body {
@@ -21,9 +32,32 @@
       max-width: 700px;
       margin: 40px auto;
       padding: 0 20px;
+      position: relative;
     }
 
-    h1 { font-weight: 300; letter-spacing: -0.5px; }
+    /* Theme Toggle Switch positioning */
+    .theme-toggle-container {
+      position: absolute;
+      top: 0;
+      right: 20px;
+    }
+
+    .theme-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: background 0.2s, color 0.2s;
+    }
+    .theme-btn:hover { background: var(--border); }
+
+    h1 { font-weight: 300; letter-spacing: -0.5px; margin-top: 0; }
 
     .control-panel {
       display: flex;
@@ -31,7 +65,7 @@
       margin-bottom: 20px;
     }
 
-    input, textarea, button {
+    input, button {
       background: var(--card-bg);
       border: 1px solid var(--border);
       color: var(--text);
@@ -40,14 +74,14 @@
       font-size: 14px;
     }
 
-    input:focus, textarea:focus { outline: 1px solid var(--accent); }
+    input:focus { outline: 1px solid var(--accent); }
 
     button {
       cursor: pointer;
-      background: #252525;
+      background: var(--card-bg);
       transition: background 0.2s;
     }
-    button:hover { background: #333; }
+    button:hover { background: var(--border); }
 
     .folder {
       border: 1px solid var(--border);
@@ -75,12 +109,32 @@
       border-top: 1px solid var(--border);
     }
 
-    textarea {
+    /* Word-like rich text document styles */
+    .word-editor {
       width: 100%;
-      height: 120px;
+      min-height: 150px;
+      max-height: 500px;
       margin-top: 10px;
-      resize: vertical;
+      padding: 15px;
+      background: var(--editor-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: 'Calibri', 'Arial', sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      overflow-y: auto;
       box-sizing: border-box;
+      outline: none;
+    }
+    .word-editor:focus {
+      border-color: var(--accent);
+    }
+
+    /* Native paragraph separation matching Word defaults */
+    .word-editor p {
+      margin-top: 0;
+      margin-bottom: 8px;
     }
 
     .status {
@@ -92,6 +146,11 @@
   </style>
 </head>
 <body>
+
+  <!-- Theme Toggle -->
+  <div class="theme-toggle-container">
+    <button class="theme-btn" onclick="toggleTheme()" id="theme-toggle-btn">🌙 Dark Mode</button>
+  </div>
 
   <h1>Notes</h1>
 
@@ -111,10 +170,22 @@
     let notesData = [];
     let fileSha = "";
     
-    // Variables to track UI state so we don't disrupt the user
     let openFolders = {}; 
     let focusedFolderId = null; 
     let saveTimeout = null;
+
+    // Light/Dark Theme Switcher
+    function toggleTheme() {
+      const html = document.documentElement;
+      const btn = document.getElementById("theme-toggle-btn");
+      if (html.getAttribute("data-theme") === "dark") {
+        html.setAttribute("data-theme", "light");
+        btn.innerHTML = "☀️ Light Mode";
+      } else {
+        html.setAttribute("data-theme", "dark");
+        btn.innerHTML = "🌙 Dark Mode";
+      }
+    }
 
     async function loadNotes() {
       try {
@@ -127,7 +198,6 @@
         
         const newData = JSON.parse(decodeURIComponent(escape(atob(data.content))));
         
-        // Only update local data if the user isn't actively typing
         if (!focusedFolderId) {
           notesData = newData;
           render();
@@ -162,7 +232,6 @@
     }
 
     function render() {
-      // 1. Save the open/closed state of existing folders before redrawing
       document.querySelectorAll('details').forEach(details => {
         const id = details.getAttribute('data-id');
         if (id) openFolders[id] = details.open;
@@ -175,9 +244,9 @@
         const folderEl = document.createElement("div");
         folderEl.className = "folder";
         
-        // 2. Restore open state if it was open previously
         const isOpen = openFolders[folder.id] ? "open" : "";
 
+        // Using a contenteditable div instead of textarea to retain rich layout syntax (bold, paragraphs, etc.)
         folderEl.innerHTML = `
           <details data-id="${folder.id}" ${isOpen}>
             <summary>
@@ -185,11 +254,13 @@
               <span style="font-size: 12px; color: var(--text-muted);">Click to toggle</span>
             </summary>
             <div class="folder-content">
-              <textarea 
+              <div 
+                class="word-editor"
+                contenteditable="true"
                 onfocus="focusedFolderId = ${folder.id}" 
                 onblur="focusedFolderId = null"
-                oninput="updateNote(${index}, this.value)"
-              >${escapeHtml(folder.content)}</textarea>
+                oninput="updateNote(${index}, this.innerHTML)"
+              >${folder.content || ''}</div>
               <div class="status" id="status-${index}">Saved</div>
             </div>
           </details>
@@ -205,23 +276,21 @@
 
       const newId = Date.now();
       notesData.push({ id: newId, title: title, content: "" });
-      openFolders[newId] = true; // Auto-open new folders
+      openFolders[newId] = true;
       input.value = "";
       
       render();
       saveNotes();
     }
 
-    function updateNote(index, text) {
-      notesData[index].content = text;
+    function updateNote(index, htmlContent) {
+      notesData[index].content = htmlContent;
       const statusEl = document.getElementById(`status-${index}`);
       statusEl.innerText = "Typing...";
       statusEl.style.color = "var(--accent)";
 
-      // Clear the previous timeout if the user keeps typing
       clearTimeout(saveTimeout);
       
-      // Wait 1 second after the user STOPS typing to save to GitHub (Prevents GitHub rate-limiting)
       saveTimeout = setTimeout(() => {
         statusEl.innerText = "Saving to GitHub...";
         saveNotes().then(() => {
@@ -235,9 +304,8 @@
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
-    // Initial load and background sync
     loadNotes();
-    setInterval(loadNotes, 10000); // Continues to sync background changes across devices safely
+    setInterval(loadNotes, 10000);
   </script>
 </body>
 </html>
