@@ -35,7 +35,7 @@
       background: var(--card-bg);
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
-      margin-bottom: 30px;
+      margin-bottom: 20px;
     }
 
     .drop-zone:hover, .drop-zone.dragover {
@@ -47,6 +47,39 @@
     .drop-zone span { color: var(--accent); font-weight: 500; }
 
     #file-input { display: none; }
+
+    /* Progress Bar Styles */
+    .progress-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: var(--text-muted);
+    }
+
+    .progress-bar-track {
+      background: var(--border);
+      border-radius: 4px;
+      height: 6px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      background: var(--accent);
+      height: 100%;
+      width: 0%;
+      transition: width 0.1s ease;
+    }
 
     /* File List Styles */
     .file-list { display: flex; flex-direction: column; gap: 10px; }
@@ -74,10 +107,16 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 450px;
+      max-width: 350px;
     }
     
-    .file-size { font-size: 12px; color: var(--text-muted); }
+    .file-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 10px;
+      margin-top: 2px;
+    }
 
     .download-btn {
       background: #252525;
@@ -92,6 +131,7 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      white-space: nowrap;
     }
 
     .download-btn:hover {
@@ -112,15 +152,23 @@
 
   <h1>File Library</h1>
 
-  <!-- File Upload Area -->
   <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
     <p>📄 Drag & drop Excel, Word, or PDF files here, or <span>Browse</span></p>
     <input type="file" id="file-input" onchange="handleFileUpload(this.files[0])">
   </div>
   
+  <div class="progress-container" id="progress-container">
+    <div class="progress-info">
+      <span id="progress-filename">Downloading...</span>
+      <span id="progress-percentage">0%</span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
   <div class="status-text" id="status"></div>
 
-  <!-- Library Directory Container -->
   <h2 style="font-size: 16px; font-weight: 400; color: var(--text-muted); margin-top: 40px;">Stored Documents</h2>
   <div class="file-list" id="file-list">
     <div class="status-text">Loading library files...</div>
@@ -149,20 +197,47 @@
         const files = await res.json();
         container.innerHTML = "";
 
+        // To display commit dates/times, fetch commits for the folder path
+        const commitsRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?path=${FOLDER_PATH}&per_page=100`, {
+          headers: { Authorization: `token ${GITHUB_TOKEN}` }
+        });
+        const commits = commitsRes.ok ? await commitsRes.json() : [];
+
+        // Build a map of filename -> last modified date based on commit history
+        const fileDates = {};
+        commits.forEach(commit => {
+          const commitDate = commit.commit.committer.date;
+          commit.files.forEach(f => {
+            if (f.filename.startsWith(FOLDER_PATH + "/")) {
+              const fname = f.filename.split('/').pop();
+              if (!fileDates[fname]) {
+                fileDates[fname] = commitDate;
+              }
+            }
+          });
+        });
+
         files.forEach(file => {
           if (file.type === "file") {
             const fileItem = document.createElement("div");
             fileItem.className = "file-item";
             
+            const rawDate = fileDates[file.name] || new Date().toISOString();
+            const formattedDate = formatGMTDate(rawDate);
+
             fileItem.innerHTML = `
               <div class="file-info">
                 <span class="file-icon">${getFileIcon(file.name)}</span>
                 <div>
-                  <div class="file-name">${escapeHtml(file.name)}</div>
-                  <div class="file-size">${formatBytes(file.size)}</div>
+                  <div class="file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
+                  <div class="file-meta">
+                    <span>${formatBytes(file.size)}</span>
+                    <span>•</span>
+                    <span>${formattedDate}</span>
+                  </div>
                 </div>
               </div>
-              <button class="download-btn" onclick="downloadFile('${file.download_url}', '${escapeHtml(file.name)}')">
+              <button class="download-btn" onclick="downloadFileWithProgress('${file.download_url}', '${escapeHtml(file.name)}')">
                 ⬇ Download
               </button>
             `;
@@ -230,19 +305,68 @@
       reader.readAsDataURL(file); // Reads file as Base64 format
     }
 
-    // Download Handler
-    async function downloadFile(url, fileName) {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
+    // Download Handler with Real-Time Progress Bar
+    async function downloadFileWithProgress(url, fileName) {
+      const container = document.getElementById("progress-container");
+      const filenameEl = document.getElementById("progress-filename");
+      const percentageEl = document.getElementById("progress-percentage");
+      const fillEl = document.getElementById("progress-fill");
+
+      container.style.display = "block";
+      filenameEl.innerText = `Downloading ${fileName}...`;
+      percentageEl.innerText = "0%";
+      fillEl.style.width = "0%";
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error("Network response was not ok");
+
+        const contentLength = response.headers.get('content-length');
+        const total = contentLength ? parseInt(contentLength, 10) : 0;
+        let loaded = 0;
+
+        const reader = response.body.getReader();
+        const chunks = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          loaded += value.length;
+
+          if (total > 0) {
+            const percent = Math.round((loaded / total) * 100);
+            percentageEl.innerText = `${percent}%`;
+            fillEl.style.width = `${percent}%`;
+          } else {
+            percentageEl.innerText = formatBytes(loaded);
+            fillEl.style.width = "100%"; // Indeterminate fallback style
+          }
+        }
+
+        const blob = new Blob(chunks);
+        const blobUrl = window.URL.createObjectURL(blob);
+        
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(blobUrl);
+
+        setTimeout(() => {
+          container.style.display = "none";
+        }, 1000);
+
+      } catch (err) {
+        console.error("Download failed", err);
+        filenameEl.innerText = `Download failed for ${fileName}`;
+        setTimeout(() => {
+          container.style.display = "none";
+        }, 2000);
+      }
     }
 
     // Helper functions
@@ -256,11 +380,25 @@
     }
 
     function formatBytes(bytes) {
-      if (bytes === 0) return '0 Bytes';
+      if (bytes === 0) return '0.0 Bytes';
       const k = 1024;
       const sizes = ['Bytes', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function formatGMTDate(isoString) {
+      const date = new Date(isoString);
+      const options = { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        timeZone: 'UTC', 
+        timeZoneName: 'short' 
+      };
+      return date.toLocaleDateString('en-US', options);
     }
 
     function escapeHtml(str) {
