@@ -48,6 +48,24 @@
 
     #file-input { display: none; }
 
+    /* Progress Bar Styles */
+    .progress-container {
+      width: 100%;
+      background: var(--border);
+      border-radius: 4px;
+      margin-top: 10px;
+      height: 6px;
+      overflow: hidden;
+      display: none;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.1s ease-out;
+    }
+
     /* File List Styles */
     .file-list { display: flex; flex-direction: column; gap: 10px; }
 
@@ -77,13 +95,12 @@
       max-width: 450px;
     }
     
-    .file-size { font-size: 12px; color: var(--text-muted); }
-
-    .download-wrapper {
+    .file-meta {
       display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 4px;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
     }
 
     .download-btn {
@@ -107,22 +124,6 @@
       border-color: var(--accent);
     }
 
-    .download-progress {
-      width: 100px;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      overflow: hidden;
-      display: none;
-    }
-
-    .download-progress-bar {
-      height: 100%;
-      width: 0%;
-      background: var(--accent);
-      transition: width 0.1s linear;
-    }
-
     .status-text {
       text-align: center;
       font-size: 13px;
@@ -135,13 +136,18 @@
 
   <h1>File Library</h1>
 
+  <!-- File Upload Area -->
   <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
     <p>📄 Drag & drop Excel, Word, or PDF files here, or <span>Browse</span></p>
     <input type="file" id="file-input" onchange="handleFileUpload(this.files[0])">
   </div>
   
   <div class="status-text" id="status"></div>
+  <div class="progress-container" id="progress-container">
+    <div class="progress-bar" id="progress-bar"></div>
+  </div>
 
+  <!-- Library Directory Container -->
   <h2 style="font-size: 16px; font-weight: 400; color: var(--text-muted); margin-top: 40px;">Stored Documents</h2>
   <div class="file-list" id="file-list">
     <div class="status-text">Loading library files...</div>
@@ -153,7 +159,7 @@
     const FOLDER_PATH = "uploads"; // Folder inside your GitHub repo to hold files
     const GITHUB_TOKEN = ["github_pat_", "11BU7EYPY0NIeDA3MPMrKU", "_axecM0wHCQziWUqpQ4gd9PBAJmF5S01hi2rXmyIN0ZvCPMH4DTN", "ZTBpLGtO"].join("");
 
-    // Load library items from GitHub API
+    // Load library items from GitHub API via info.json fallback
     async function loadLibrary() {
       try {
         const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FOLDER_PATH}?t=${Date.now()}`, {
@@ -169,53 +175,48 @@
 
         const files = await res.json();
         
-        // Fetch commit details to get precise upload dates/times (GMT)
-        const commitsRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/commits?path=${FOLDER_PATH}&per_page=100`, {
-          headers: { Authorization: `token ${GITHUB_TOKEN}` }
-        });
-        const commits = commitsRes.ok ? await commitsRes.json() : [];
-        const fileCommitMap = {};
-
-        for (const commit of commits) {
-          const detailRes = await fetch(commit.url, {
-            headers: { Authorization: `token ${GITHUB_TOKEN}` }
-          });
-          if (detailRes.ok) {
-            const detailData = await detailRes.json();
-            if (detailData.files) {
-              for (const f of detailData.files) {
-                if (f.filename.startsWith(FOLDER_PATH) && !fileCommitMap[f.filename]) {
-                  fileCommitMap[f.filename] = commit.commit.committer.date;
-                }
+        // Extract metadata map from info.json if it exists
+        let metaMap = {};
+        const infoFile = files.find(f => f.name === "info.json");
+        if (infoFile) {
+          try {
+            const infoRes = await fetch(infoFile.download_url + `?t=${Date.now()}`);
+            if (infoRes.ok) {
+              const infoData = await infoRes.json();
+              if (Array.isArray(infoData)) {
+                infoData.forEach(item => { metaMap[item.name] = item; });
               }
             }
+          } catch (e) {
+            console.error("Failed to parse info.json", e);
           }
         }
 
         container.innerHTML = "";
 
         files.forEach(file => {
-          if (file.type === "file") {
+          if (file.type === "file" && file.name !== "info.json") {
+            const meta = metaMap[file.name] || {};
+            const displaySize = meta.size !== undefined ? formatBytes(meta.size) : formatBytes(file.size);
+            const displayDate = meta.uploadedAt ? formatGMTDate(meta.uploadedAt) : "";
+
             const fileItem = document.createElement("div");
             fileItem.className = "file-item";
             
-            const rawDate = fileCommitMap[file.path];
-            const dateStr = rawDate ? new Date(rawDate).toUTCString().replace("GMT", "GMT") : "Unknown Date";
-
             fileItem.innerHTML = `
               <div class="file-info">
                 <span class="file-icon">${getFileIcon(file.name)}</span>
                 <div>
                   <div class="file-name">${escapeHtml(file.name)}</div>
-                  <div class="file-size">${formatBytes(file.size)} &bull; ${dateStr}</div>
+                  <div class="file-meta">
+                    <span>${displaySize}</span>
+                    ${displayDate ? `<span>•</span><span>${displayDate}</span>` : ""}
+                  </div>
                 </div>
               </div>
-              <div class="download-wrapper">
-                <button class="download-btn" onclick="downloadFile(this, '${file.download_url}', '${escapeHtml(file.name)}')">
-                  ⬇ Download
-                </button>
-                <div class="download-progress"><div class="download-progress-bar"></div></div>
-              </div>
+              <button class="download-btn" onclick="downloadFile('${file.download_url}', '${escapeHtml(file.name)}')">
+                ⬇ Download
+              </button>
             `;
             container.appendChild(fileItem);
           }
@@ -225,13 +226,18 @@
       }
     }
 
-    // Upload selected file to GitHub
+    // Upload selected file to GitHub using XHR to track real upload progress bytes
     async function handleFileUpload(file) {
       if (!file) return;
 
       const statusEl = document.getElementById("status");
-      statusEl.innerText = `Uploading "${file.name}"... Please wait.`;
+      const progressContainer = document.getElementById("progress-container");
+      const progressBar = document.getElementById("progress-bar");
+      
+      statusEl.innerText = `Preparing upload for "${file.name}"...`;
       statusEl.style.color = "var(--accent)";
+      progressContainer.style.display = "block";
+      progressBar.style.width = "0%";
 
       const reader = new FileReader();
       reader.onload = async function () {
@@ -239,6 +245,8 @@
         const filePath = `${FOLDER_PATH}/${file.name}`;
 
         try {
+          statusEl.innerText = `Checking existing file status...`;
+          
           // Check if file already exists to supply sha for overwrite
           let existingSha = "";
           const checkRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`, {
@@ -249,30 +257,63 @@
             existingSha = existingData.sha;
           }
 
-          // Commit file to GitHub
-          const uploadRes = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`, {
-            method: "PUT",
-            headers: {
-              Authorization: `token ${GITHUB_TOKEN}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              message: `Upload ${file.name}`,
-              content: base64Content,
-              sha: existingSha || undefined
-            })
+          statusEl.innerText = `Uploading "${file.name}"... (0.0 Bytes / ${formatBytes(file.size)})`;
+
+          const payload = JSON.stringify({
+            message: `Upload ${file.name}`,
+            content: base64Content,
+            sha: existingSha || undefined
           });
 
-          if (uploadRes.ok) {
-            statusEl.innerText = `Uploaded "${file.name}" successfully!`;
-            statusEl.style.color = "#4CAF50";
-            loadLibrary(); // Live refresh file list
-          } else {
-            statusEl.innerText = "Upload failed. Check GitHub permissions or file size limit (Max 100MB).";
-            statusEl.style.color = "#FF5252";
-          }
+          // Use XMLHttpRequest to track true upload progress (bytes sent over network)
+          await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("PUT", `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${filePath}`, true);
+            xhr.setRequestHeader("Authorization", `token ${GITHUB_TOKEN}`);
+            xhr.setRequestHeader("Content-Type", "application/json");
+
+            xhr.upload.onprogress = function(event) {
+              if (event.lengthComputable) {
+                const percent = (event.loaded / event.total) * 100;
+                progressBar.style.width = percent + "%";
+                statusEl.innerText = `Uploading "${file.name}"... (${formatBytes(event.loaded)} / ${formatBytes(event.total)})`;
+              }
+            };
+
+            xhr.onload = async function() {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                progressBar.style.width = "100%";
+                statusEl.innerText = `Finalizing metadata...`;
+                
+                // Update info.json
+                await updateInfoJson(file.name, file.size);
+
+                statusEl.innerText = `Uploaded "${file.name}" successfully!`;
+                statusEl.style.color = "#4CAF50";
+                loadLibrary(); // Live refresh file list
+                setTimeout(() => { progressContainer.style.display = "none"; }, 1500);
+                resolve();
+              } else {
+                progressContainer.style.display = "none";
+                statusEl.innerText = "Upload failed. Check GitHub permissions or file size limit (Max 100MB).";
+                statusEl.style.color = "#FF5252";
+                reject(new Error("Upload failed"));
+              }
+            };
+
+            xhr.onerror = function() {
+              progressContainer.style.display = "none";
+              statusEl.innerText = "Network error occurred during upload.";
+              statusEl.style.color = "#FF5252";
+              reject(new Error("Network error"));
+            };
+
+            xhr.send(payload);
+          });
+
         } catch (err) {
           console.error(err);
+          progressContainer.style.display = "none";
           statusEl.innerText = "Error uploading file.";
           statusEl.style.color = "#FF5252";
         }
@@ -281,56 +322,56 @@
       reader.readAsDataURL(file); // Reads file as Base64 format
     }
 
-    // Download Handler with relative loading progress bar
-    async function downloadFile(btnElement, url, fileName) {
-      const wrapper = btnElement.closest('.download-wrapper');
-      const progressBar = wrapper.querySelector('.download-progress');
-      const progressBarFill = wrapper.querySelector('.download-progress-bar');
-      
-      btnElement.style.display = 'none';
-      progressBar.style.display = 'block';
-      progressBarFill.style.width = '0%';
+    // Helper to update info.json inside the upload directory
+    async function updateInfoJson(fileName, fileSize) {
+      const infoPath = `${FOLDER_PATH}/info.json`;
+      let infoList = [];
+      let infoSha = "";
 
       try {
-        const response = await fetch(url);
-        const contentLength = response.headers.get('content-length');
-        
-        if (!contentLength) {
-          progressBarFill.style.width = '100%';
-          const blob = await response.blob();
-          triggerBlobDownload(blob, fileName);
-          return;
+        const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${infoPath}`, {
+          headers: { Authorization: `token ${GITHUB_TOKEN}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          infoSha = data.sha;
+          const decoded = decodeURIComponent(escape(atob(data.content)));
+          infoList = JSON.parse(decoded);
         }
-
-        const total = parseInt(contentLength, 10);
-        let loaded = 0;
-        const reader = response.body.getReader();
-        const chunks = [];
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-          loaded += value.length;
-          const percent = Math.round((loaded / total) * 100);
-          progressBarFill.style.width = percent + '%';
-        }
-
-        const blob = new Blob(chunks);
-        triggerBlobDownload(blob, fileName);
-      } catch (err) {
-        console.error("Download failed", err);
-      } finally {
-        setTimeout(() => {
-          progressBar.style.display = 'none';
-          progressBarFill.style.width = '0%';
-          btnElement.style.display = 'flex';
-        }, 500);
+      } catch (e) {
+        // info.json might not exist yet, which is totally fine
       }
+
+      // Filter out existing entry for this filename if any, then push new entry with current GMT time
+      infoList = infoList.filter(item => item.name !== fileName);
+      infoList.push({
+        name: fileName,
+        size: fileSize,
+        uploadedAt: new Date().toUTCString()
+      });
+
+      const updatedContent = btoa(unescape(encodeURIComponent(JSON.stringify(infoList, null, 2))));
+
+      await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${infoPath}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${GITHUB_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: `Update info.json for ${fileName}`,
+          content: updatedContent,
+          sha: infoSha || undefined
+        })
+      });
     }
 
-    function triggerBlobDownload(blob, fileName) {
+    // Download Handler
+    async function downloadFile(url, fileName) {
+      const response = await fetch(url);
+      const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
+      
       const a = document.createElement("a");
       a.href = blobUrl;
       a.download = fileName;
@@ -355,7 +396,14 @@
       const k = 1024;
       const sizes = ['Bytes', 'KB', 'MB', 'GB'];
       const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function formatGMTDate(dateString) {
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return dateString;
+      const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC', timeZoneName: 'short' };
+      return d.toLocaleDateString('en-US', options);
     }
 
     function escapeHtml(str) {
