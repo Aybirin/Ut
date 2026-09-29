@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Time Record Table</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+        .controls-container {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            background: #ffffff;
+            padding: 10px 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .controls-container label {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        select, button {
+            padding: 6px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            background-color: #fff;
+        }
+        button {
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #c0392b;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            table-layout: fixed; /* Ensures constant cell sizes */
+        }
+        th, td {
+            border: 1px solid #000000;
+            padding: 8px;
+            text-align: center;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .time-cell {
+            cursor: pointer;
+            color: #555;
+            user-select: none;
+        }
+        .time-cell:hover {
+            background-color: #eaf2f8;
+            color: #000;
+        }
+        .time-cell.active {
+            background-color: #d4edda !important;
+            border: 2px solid #28a745 !important;
+            color: #155724;
+            font-weight: bold;
+        }
+        .total-row td {
+            font-weight: bold;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Controls for Format & Reset -->
+    <div class="controls-container">
+        <div>
+            <label for="formatSelect">Calculation Format: </label>
+            <select id="formatSelect">
+                <option value="hm">Hours & Minutes (e.g., 8h 30m)</option>
+                <option value="decimal">Decimal Hours (e.g., 8.5)</option>
+            </select>
+        </div>
+        <button id="resetBtn" title="Resets time entries only">Reset Entries</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>No. of Hours</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>No. of Hours</th>
+                <th>Total No. of Hours</th>
+            </tr>
+        </thead>
+        <tbody id="dtr-body">
+            <!-- Rows 1 to 31 -->
+        </tbody>
+    </table>
+
+<script>
+    const totalRows = 31;
+    const tbody = document.getElementById('dtr-body');
+    const formatSelect = document.getElementById('formatSelect');
+    const resetBtn = document.getElementById('resetBtn');
+    const timeCols = [1, 2, 4, 5];
+
+    let activeCell = null;
+    let editState = { row: null, col: null, hour: '', min: '', ampm: 'AM', step: 'hour' };
+
+    // Initialize table rows
+    for (let i = 1; i <= totalRows; i++) {
+        const tr = document.createElement('tr');
+        // Default PM for columns 4 and 5 (PM Time In / Time Out), AM for columns 1 and 2
+        tr.innerHTML = `
+            <td>${i}</td>
+            <td class="time-cell" data-row="${i}" data-col="1">_:_ AM</td>
+            <td class="time-cell" data-row="${i}" data-col="2">_:_ AM</td>
+            <td data-row="${i}" data-col="3"></td>
+            <td class="time-cell" data-row="${i}" data-col="4">_:_ PM</td>
+            <td class="time-cell" data-row="${i}" data-col="5">_:_ PM</td>
+            <td data-row="${i}" data-col="6"></td>
+            <td data-row="${i}" data-col="7"></td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    // Add summary row
+    const summaryTr = document.createElement('tr');
+    summaryTr.classList.add('total-row');
+    summaryTr.innerHTML = `
+        <td colspan="7" style="text-align: right;">TOTAL NUMBER OF HOURS WORK FOR THE MONTH:</td>
+        <td id="grand-total">0h 0m</td>
+    `;
+    tbody.appendChild(summaryTr);
+
+    // Load saved preferences and data
+    const savedFormat = localStorage.getItem('dtr_calc_format');
+    if (savedFormat) {
+        formatSelect.value = savedFormat;
+    }
+
+    loadSavedData();
+    calculateAll();
+
+    // Event listener for format change
+    formatSelect.addEventListener('change', () => {
+        localStorage.setItem('dtr_calc_format', formatSelect.value);
+        calculateAll();
+    });
+
+    // Click handler to activate cell
+    document.querySelectorAll('.time-cell').forEach(cell => {
+        cell.addEventListener('click', function(e) {
+            e.stopPropagation();
+            activateCell(this);
+        });
+    });
+
+    // Click outside to save and close active cell
+    document.addEventListener('click', (e) => {
+        if (activeCell && !e.target.classList.contains('time-cell')) {
+            saveAndCloseActive();
+        }
+    });
+
+    // Keyboard navigation and typing logic
+    document.addEventListener('keydown', (e) => {
+        if (!activeCell) return;
+
+        // Handle Tab / Shift+Tab with CapsLock check for vertical row navigation
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            saveAndCloseActive();
+            if (e.getModifierState && e.getModifierState('CapsLock')) {
+                navigateRows(e.shiftKey ? -1 : 1);
+            } else {
+                navigateCells(e.shiftKey ? -1 : 1);
+            }
+            return;
+        }
+
+        // Handle Enter key progression
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (editState.step === 'hour') {
+                editState.step = 'minute';
+                updateActiveDisplay();
+            } else if (editState.step === 'minute') {
+                editState.step = 'ampm';
+                updateActiveDisplay();
+            } else if (editState.step === 'ampm') {
+                saveAndCloseActive();
+                navigateCells(1);
+            }
+            return;
+        }
+
+        // Typing inputs based on current step
+        if (editState.step === 'hour') {
+            if (e.key >= '0' && e.key <= '9') {
+                if (editState.hour.length < 2) {
+                    editState.hour += e.key;
+                    updateActiveDisplay();
+                    if (editState.hour.length === 2) {
+                        editState.step = 'minute';
+                        updateActiveDisplay();
+                    }
+                }
+            } else if (e.key === 'Backspace') {
+                if (editState.hour.length > 0) {
+                    editState.hour = editState.hour.slice(0, -1);
+                    updateActiveDisplay();
+                }
+            }
+        } else if (editState.step === 'minute') {
+            if (e.key >= '0' && e.key <= '9') {
+                if (editState.min.length < 2) {
+                    editState.min += e.key;
+                    updateActiveDisplay();
+                    if (editState.min.length === 2) {
+                        editState.step = 'ampm';
+                        updateActiveDisplay();
+                    }
+                }
+            } else if (e.key === 'Backspace') {
+                if (editState.min.length > 0) {
+                    editState.min = editState.min.slice(0, -1);
+                    updateActiveDisplay();
+                } else {
+                    // Go back to hour if deleting past empty minute
+                    editState.step = 'hour';
+                    editState.hour = editState.hour.slice(0, -1);
+                    updateActiveDisplay();
+                }
+            }
+        } else if (editState.step === 'ampm') {
+            if (e.key === 'Backspace') {
+                editState.step = 'minute';
+                editState.min = editState.min.slice(0, -1);
+                updateActiveDisplay();
+            } else {
+                // Any key switches AM/PM
+                editState.ampm = editState.ampm === 'AM' ? 'PM' : 'AM';
+                updateActiveDisplay();
+            }
+        }
+    });
+
+    function activateCell(cell) {
+        if (activeCell && activeCell !== cell) {
+            saveAndCloseActive();
+        }
+        activeCell = cell;
+        cell.classList.add('active');
+        
+        let row = parseInt(cell.getAttribute('data-row'), 10);
+        let col = parseInt(cell.getAttribute('data-col'), 10);
+
+        let defaultDefaultAmpm = (col === 4 || col === 5) ? 'PM' : 'AM';
+        let existing = localStorage.getItem(`dtr_time_${row}_${col}`);
+        if (existing && !existing.includes('_')) {
+            let parts = existing.split(' ');
+            let timeParts = parts[0].split(':');
+            editState = {
+                row: row,
+                col: col,
+                hour: timeParts[0],
+                min: timeParts[1],
+                ampm: parts[1] || defaultDefaultAmpm,
+                step: 'hour'
+            };
+        } else {
+            editState = { row: row, col: col, hour: '', min: '', ampm: defaultDefaultAmpm, step: 'hour' };
+        }
+        updateActiveDisplay();
+    }
+
+    function updateActiveDisplay() {
+        if (!activeCell) return;
+        let h = editState.hour.padStart(2, '_');
+        let m = editState.min.padStart(2, '_');
+        activeCell.textContent = `${h}:${m} ${editState.ampm}`;
+    }
+
+    function saveAndCloseActive() {
+        if (!activeCell) return;
+        
+        // If entirely empty, leave blank
+        if (editState.hour === '' && editState.min === '') {
+            activeCell.textContent = `_:_ ${editState.ampm}`;
+            activeCell.classList.remove('active');
+            localStorage.removeItem(`dtr_time_${editState.row}_${editState.col}`);
+            calculateRow(editState.row);
+            activeCell = null;
+            return;
+        }
+
+        let h = parseInt(editState.hour, 10);
+        let m = parseInt(editState.min, 10);
+        if (isNaN(h) || h < 1 || h > 12) h = 8;
+        if (isNaN(m) || m < 0 || m > 59) m = 0;
+
+        let formattedTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${editState.ampm}`;
+        activeCell.textContent = formattedTime;
+        activeCell.classList.remove('active');
+
+        localStorage.setItem(`dtr_time_${editState.row}_${editState.col}`, formattedTime);
+        calculateRow(editState.row);
+        activeCell = null;
+    }
+
+    function getCell(row, col) {
+        return document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+    }
+
+    function navigateCells(direction) {
+        if (!editState.row) return;
+        let r = editState.row;
+        let cIdx = timeCols.indexOf(editState.col);
+        cIdx += direction;
+        if (cIdx >= timeCols.length) {
+            cIdx = 0;
+            r = r < totalRows ? r + 1 : 1;
+        } else if (cIdx < 0) {
+            cIdx = timeCols.length - 1;
+            r = r > 1 ? r - 1 : totalRows;
+        }
+        let nextCell = getCell(r, timeCols[cIdx]);
+        if (nextCell) activateCell(nextCell);
+    }
+
+    function navigateRows(direction) {
+        if (!editState.row) return;
+        let r = editState.row + direction;
+        if (r < 1) r = totalRows;
+        if (r > totalRows) r = 1;
+        let nextCell = getCell(r, editState.col);
+        if (nextCell) activateCell(nextCell);
+    }
+
+    // Reset button handler (preserves calculation format)
+    resetBtn.addEventListener('click', () => {
+        if (confirm("Are you sure you want to reset all time entries?")) {
+            for (let i = 1; i <= totalRows; i++) {
+                for (let col of timeCols) {
+                    localStorage.removeItem(`dtr_time_${i}_${col}`);
+                }
+            }
+            document.querySelectorAll('.time-cell').forEach(cell => {
+                let col = parseInt(cell.getAttribute('data-col'), 10);
+                let defaultAmpm = (col === 4 || col === 5) ? 'PM' : 'AM';
+                cell.textContent = `_:_ ${defaultAmpm}`;
+            });
+            calculateAll();
+        }
+    });
+
+    function loadSavedData() {
+        for (let i = 1; i <= totalRows; i++) {
+            for (let col of timeCols) {
+                let savedTime = localStorage.getItem(`dtr_time_${i}_${col}`);
+                if (savedTime) {
+                    let cell = getCell(i, col);
+                    if (cell) cell.textContent = savedTime;
+                }
+            }
+        }
+    }
+
+    function timeToMinutes(timeStr) {
+        if (!timeStr || timeStr.includes('_')) return null;
+        let parts = timeStr.split(' ');
+        let timeParts = parts[0].split(':');
+        let h = parseInt(timeParts[0], 10);
+        let m = parseInt(timeParts[1], 10);
+        let ap = parts[1] ? parts[1].toUpperCase() : 'AM';
+
+        if (ap === 'PM' && h < 12) h += 12;
+        if (ap === 'AM' && h === 12) h = 0;
+
+        return h * 60 + m;
+    }
+
+    function formatHours(totalMins, format) {
+        if (totalMins <= 0) return format === 'decimal' ? '0.0h' : '0h 0m';
+        let hrs = Math.floor(totalMins / 60);
+        let mins = totalMins % 60;
+
+        if (format === 'decimal') {
+            return (totalMins / 60).toFixed(2) + 'h';
+        } else {
+            return `${hrs}h ${mins}m`;
+        }
+    }
+
+    function calculateRow(row) {
+        let format = formatSelect.value;
+        
+        let in1 = timeToMinutes(localStorage.getItem(`dtr_time_${row}_1`));
+        let out1 = timeToMinutes(localStorage.getItem(`dtr_time_${row}_2`));
+        let in2 = timeToMinutes(localStorage.getItem(`dtr_time_${row}_4`));
+        let out2 = timeToMinutes(localStorage.getItem(`dtr_time_${row}_5`));
+
+        let morningMins = (in1 !== null && out1 !== null && out1 >= in1) ? (out1 - in1) : 0;
+        let afternoonMins = (in2 !== null && out2 !== null && out2 >= in2) ? (out2 - in2) : 0;
+        let totalRowMins = morningMins + afternoonMins;
+
+        getCell(row, 3).textContent = morningMins > 0 ? formatHours(morningMins, format) : '';
+        getCell(row, 6).textContent = afternoonMins > 0 ? formatHours(afternoonMins, format) : '';
+        getCell(row, 7).textContent = totalRowMins > 0 ? formatHours(totalRowMins, format) : '';
+
+        calculateGrandTotal();
+    }
+
+    function calculateAll() {
+        for (let i = 1; i <= totalRows; i++) {
+            calculateRow(i);
+        }
+    }
+
+    function calculateGrandTotal() {
+        let format = formatSelect.value;
+        let grandTotalMins = 0;
+
+        for (let i = 1; i <= totalRows; i++) {
+            let in1 = timeToMinutes(localStorage.getItem(`dtr_time_${i}_1`));
+            let out1 = timeToMinutes(localStorage.getItem(`dtr_time_${i}_2`));
+            let in2 = timeToMinutes(localStorage.getItem(`dtr_time_${i}_4`));
+            let out2 = timeToMinutes(localStorage.getItem(`dtr_time_${i}_5`));
+
+            let morningMins = (in1 !== null && out1 !== null && out1 >= in1) ? (out1 - in1) : 0;
+            let afternoonMins = (in2 !== null && out2 !== null && out2 >= in2) ? (out2 - in2) : 0;
+
+            grandTotalMins += (morningMins + afternoonMins);
+        }
+
+        document.getElementById('grand-total').textContent = formatHours(grandTotalMins, format);
+    }
+</script>
+
+</body>
+</html>
