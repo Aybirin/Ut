@@ -17,6 +17,6 @@
   {
     "id": 1790133352051,
     "title": "link",
-    "content": "&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" pull /sdcard/Download/com.mindtwisted.kanjistudy C:\\Users\\USER\\Desktop\\<div><br></div><div>&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" shell \"run-as com.mindtwisted.kanjistudy cp -r /data/data/com.mindtwisted.kanjistudy /sdcard/Download/\"</div><div><br></div>"
+    "content": "&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" pull /sdcard/Download/com.mindtwisted.kanjistudy C:\\Users\\USER\\Desktop\\<div><br></div><div>&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" shell \"run-as com.mindtwisted.kanjistudy cp -r /data/data/com.mindtwisted.kanjistudy /sdcard/Download/\"</div><div><br></div><div><br></div><div><br></div>"
   }
 ]
