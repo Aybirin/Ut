@@ -1,0 +1,2089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Time Record Table</title>
+
+    <!-- html2canvas Library for rendering image downloads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+        }
+
+        .controls-container {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            background: #ffffff;
+            padding: 12px 18px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            flex-wrap: wrap;
+        }
+
+        .controls-container label {
+            font-weight: bold;
+            font-size: 14px;
+            user-select: none;
+        }
+
+        /* Checkbox Option Style */
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .checkbox-container input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #27ae60;
+        }
+
+        /* Custom Collapsible CSS Dropdown */
+        .dropdown-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 14px;
+            font-size: 14px;
+            background-color: #fff;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            cursor: pointer;
+            min-width: 220px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            user-select: none;
+        }
+
+        .dropdown-toggle:hover {
+            border-color: #555;
+        }
+
+        .dropdown-toggle::after {
+            content: "▲";
+            font-size: 10px;
+            transition: transform 0.3s ease;
+        }
+
+        .dropdown-wrapper.open .dropdown-toggle::after {
+            transform: rotate(180deg);
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            width: 100%;
+            background-color: #ffffff;
+            border: 1px solid #aaa;
+            border-radius: 4px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+            z-index: 100;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            overflow: hidden;
+
+            /* Collapsible Animation */
+            max-height: 0;
+            opacity: 0;
+            transition: max-height 0.3s cubic-bezier(0, 1, 0, 1), opacity 0.2s ease-out;
+            pointer-events: none;
+        }
+
+        .dropdown-wrapper.open .dropdown-menu {
+            max-height: 200px;
+            opacity: 1;
+            pointer-events: auto;
+            transition: max-height 0.3s cubic-bezier(0.5, 0, 1, 0), opacity 0.2s ease-in;
+        }
+
+        .dropdown-item {
+            padding: 10px 14px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .dropdown-item:hover {
+            background-color: #eaf2f8;
+        }
+
+        .dropdown-item.selected {
+            background-color: #d4edda;
+            font-weight: bold;
+            color: #155724;
+        }
+
+        button#resetBtn {
+            padding: 8px 14px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 4px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            font-weight: bold;
+            margin-left: auto;
+            transition: background-color 0.2s;
+        }
+
+        button#resetBtn:hover {
+            background-color: #c0392b;
+        }
+
+        .table-container {
+            width: 100%;
+            max-height: 78vh;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
+        }
+
+        table {
+            width: 100%;
+            min-width: 1000px;
+            border-collapse: collapse;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            table-layout: fixed;
+        }
+
+        th:nth-child(1),
+        td:nth-child(1) {
+            width: 70px;
+        }
+
+        th:nth-child(2),
+        td:nth-child(2),
+        th:nth-child(3),
+        td:nth-child(3),
+        th:nth-child(5),
+        td:nth-child(5),
+        th:nth-child(6),
+        td:nth-child(6) {
+            width: 155px;
+        }
+
+        th:nth-child(4),
+        td:nth-child(4),
+        th:nth-child(7),
+        td:nth-child(7) {
+            width: 155px;
+        }
+
+        th:nth-child(8),
+        td:nth-child(8) {
+            width: 165px;
+        }
+
+        th,
+        td {
+            border: 1px solid #000000;
+            padding: 8px;
+            text-align: center;
+            overflow: hidden;
+            white-space: nowrap;
+            vertical-align: middle;
+            transition: background-color 0.25s ease;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        /* HIGHLIGHT COLORS WHEN CHECKBOX IS ACTIVATED */
+        body.enable-highlights td[data-col="3"],
+        body.enable-highlights td[data-col="6"] {
+            background-color: #e1f5fe !important; /* Soft Blue for section hours */
+        }
+
+        body.enable-highlights td[data-col="7"] {
+            background-color: #e8f5e9 !important; /* Soft Green for row total hours */
+            font-weight: bold;
+        }
+
+        body.enable-highlights td#grand-total {
+            background-color: #fff8e1 !important; /* Soft Gold for monthly total */
+            font-weight: bold;
+        }
+
+        .time-cell-container {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+        }
+
+        .time-entry-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3px 18px 3px 3px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #555;
+            user-select: none;
+            -webkit-user-select: none;
+            min-height: 28px;
+        }
+
+        .time-entry-row:hover {
+            background-color: #eaf2f8;
+            color: #000;
+        }
+
+        /* Action Buttons */
+        .btn-add-row,
+        .btn-remove-row {
+            position: absolute;
+            right: 2px;
+            width: 18px;
+            height: 18px;
+            line-height: 16px;
+            font-size: 13px;
+            font-weight: bold;
+            text-align: center;
+            border-radius: 50%;
+            cursor: pointer;
+            display: none;
+            z-index: 5;
+            user-select: none;
+            border: none;
+            padding: 0;
+        }
+
+        .btn-add-row {
+            top: 2px;
+            background-color: #27ae60;
+            color: #ffffff;
+        }
+
+        .btn-add-row:hover {
+            background-color: #219150;
+        }
+
+        .btn-remove-row {
+            top: 50%;
+            transform: translateY(-50%);
+            background-color: #e74c3c;
+            color: #ffffff;
+        }
+
+        .btn-remove-row:hover {
+            background-color: #c0392b;
+        }
+
+        /* Show buttons upon selection */
+        .time-cell-container.is-selected .btn-add-row {
+            display: block;
+        }
+
+        .time-cell-container.is-selected .btn-remove-row {
+            display: block;
+        }
+
+        .input-part {
+            display: inline-block;
+            min-width: 12px;
+            border-radius: 3px;
+            padding: 1px 2px;
+            cursor: pointer;
+        }
+
+        .input-part.editing {
+            background-color: #d4edda;
+            outline: 2px solid #28a745;
+            color: #155724;
+            font-weight: bold;
+        }
+
+        .input-part.editing.error {
+            background-color: #f8d7da;
+            outline: 2px solid #dc3545;
+            color: #721c24;
+            font-weight: bold;
+        }
+
+        .input-part.separator {
+            background: transparent !important;
+            outline: none !important;
+            color: inherit;
+            font-weight: normal;
+            padding: 1px 0;
+            cursor: default;
+        }
+
+        .total-row td {
+            font-weight: bold;
+            text-align: left;
+        }
+
+        #nativeTimeInput {
+            position: fixed;
+            left: -1000px;
+            top: -1000px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+            border: 0;
+            padding: 0;
+            margin: 0;
+        }
+
+        /* Table-Style Layout for Sub-Row Hour Calculations */
+        .hours-grid {
+            display: flex;
+            width: 100%;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .hours-grid-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+            text-align: center;
+        }
+
+        .hours-grid-item {
+            min-height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3px 0;
+        }
+
+        .hours-grid-total {
+            border-left: 1px solid #ccc;
+            padding-left: 8px;
+            margin-left: 8px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+        }
+
+        /* FLOATING DOWNLOAD BUTTON AT BOTTOM RIGHT */
+        .floating-download-btn {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            background-color: #2980b9;
+            color: #ffffff;
+            border: none;
+            border-radius: 50px;
+            padding: 12px 22px;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+            cursor: pointer;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+
+        .floating-download-btn:hover {
+            background-color: #1f638f;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+        }
+
+        .floating-download-btn:active {
+            transform: translateY(0);
+        }
+
+        /* MODAL DIALOG STYLES */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: #ffffff;
+            width: 90%;
+            max-width: 400px;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            transform: translateY(-20px);
+            transition: transform 0.25s ease;
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: translateY(0);
+        }
+
+        .modal-card h3 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .modal-card p {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 16px;
+            line-height: 1.4;
+        }
+
+        .modal-card input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            outline: none;
+        }
+
+        .modal-card input[type="text"]:focus {
+            border-color: #2980b9;
+            box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.2);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .modal-btn {
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            border: none;
+            transition: background 0.2s;
+        }
+
+        .modal-btn.cancel {
+            background-color: #e0e0e0;
+            color: #333;
+        }
+
+        .modal-btn.cancel:hover {
+            background-color: #d0d0d0;
+        }
+
+        .modal-btn.confirm {
+            background-color: #27ae60;
+            color: #fff;
+        }
+
+        .modal-btn.confirm:hover {
+            background-color: #219150;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="controls-container">
+    <!-- Styled Collapsible Dropdown -->
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <label>Calculation Format:</label>
+        <div class="dropdown-wrapper" id="formatDropdown">
+            <div class="dropdown-toggle" id="dropdownToggle">Hours & Minutes</div>
+            <ul class="dropdown-menu">
+                <li class="dropdown-item selected" data-value="hm">Hours & Minutes</li>
+                <li class="dropdown-item" data-value="decimal">Hours</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Color Highlights Checkbox -->
+    <label class="checkbox-container">
+        <input type="checkbox" id="highlightToggle">
+        Highlight Calculations
+    </label>
+
+    <button id="resetBtn">Reset Entries</button>
+</div>
+
+<div class="table-container" id="tableContainer">
+    <table id="dtrTable">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>No. of Hours</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>No. of Hours</th>
+                <th>Total No. of Hours</th>
+            </tr>
+        </thead>
+
+        <tbody id="dtr-body"></tbody>
+    </table>
+</div>
+
+<input
+    id="nativeTimeInput"
+    type="text"
+    inputmode="numeric"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+>
+
+<!-- FLOATING DOWNLOAD BUTTON -->
+<button class="floating-download-btn" id="downloadBtn">
+    <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+        <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+        <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+    </svg>
+    Download DTR Image
+</button>
+
+<!-- NAME INPUT MODAL -->
+<div class="modal-overlay" id="downloadModal">
+    <div class="modal-card">
+        <h3>Enter Name</h3>
+        <p>Please enter the student name</p>
+        <input type="text" id="userNameInput" placeholder="Name" autocomplete="off" />
+        <div class="modal-actions">
+            <button class="modal-btn cancel" id="cancelModalBtn">Cancel</button>
+            <button class="modal-btn confirm" id="confirmDownloadBtn">Download</button>
+        </div>
+    </div>
+</div>
+
+<script>
+
+/* =========================================================
+   BASIC SETTINGS
+   ========================================================= */
+
+const totalRows = 31;
+const tbody = document.getElementById('dtr-body');
+const highlightToggle = document.getElementById('highlightToggle');
+const resetBtn = document.getElementById('resetBtn');
+const nativeTimeInput = document.getElementById('nativeTimeInput');
+const tableContainer = document.getElementById('tableContainer');
+
+const timeCols = [1, 2, 4, 5];
+let activeCell = null;
+let currentCalcFormat = 'hm';
+
+let editState = {
+    row: null,
+    col: null,
+    subIndex: 0,
+
+    originalValue: null,
+
+    hour: '',
+    min: '',
+    ampm: 'AM',
+
+    step: 'hour',
+    position: 0,
+    hasTyped: false,
+    manualAmPm: false,
+    isInvalid: false
+};
+
+let enterCount = 0;
+let lastEnterTime = 0;
+const ENTER_WINDOW = 600;
+
+/* =========================================================
+   CREATE TABLE
+   ========================================================= */
+
+for (let i = 1; i <= totalRows; i++) {
+    const tr = document.createElement('tr');
+    tr.id = `row-${i}`;
+
+    tr.innerHTML = `
+        <td>${i}</td>
+
+        <td data-row="${i}" data-col="1">
+            <div class="time-cell-container" id="container-${i}-1">
+                <button class="btn-add-row" title="Add entry" onclick="addSubRow(${i}, 1, event)">+</button>
+                <div class="time-entry-row" data-row="${i}" data-col="1" data-sub="0">_:_ AM</div>
+            </div>
+        </td>
+
+        <td data-row="${i}" data-col="2">
+            <div class="time-cell-container" id="container-${i}-2">
+                <div class="time-entry-row" data-row="${i}" data-col="2" data-sub="0">_:_ AM</div>
+            </div>
+        </td>
+
+        <td data-row="${i}" data-col="3"></td>
+
+        <td data-row="${i}" data-col="4">
+            <div class="time-cell-container" id="container-${i}-4">
+                <button class="btn-add-row" title="Add entry" onclick="addSubRow(${i}, 4, event)">+</button>
+                <div class="time-entry-row" data-row="${i}" data-col="4" data-sub="0">_:_ PM</div>
+            </div>
+        </td>
+
+        <td data-row="${i}" data-col="5">
+            <div class="time-cell-container" id="container-${i}-5">
+                <div class="time-entry-row" data-row="${i}" data-col="5" data-sub="0">_:_ PM</div>
+            </div>
+        </td>
+
+        <td data-row="${i}" data-col="6"></td>
+
+        <td data-row="${i}" data-col="7"></td>
+    `;
+
+    tbody.appendChild(tr);
+}
+
+/* =========================================================
+   SUMMARY ROW
+   ========================================================= */
+
+const summaryTr = document.createElement('tr');
+summaryTr.classList.add('total-row');
+
+summaryTr.innerHTML = `
+    <td colspan="7" style="text-align:right;">
+        TOTAL NUMBER OF HOURS WORK FOR THE MONTH:
+    </td>
+
+    <td id="grand-total">
+        0h
+    </td>
+`;
+
+tbody.appendChild(summaryTr);
+
+/* =========================================================
+   COLLAPSIBLE DROPDOWN LOGIC
+   ========================================================= */
+
+const formatDropdown = document.getElementById('formatDropdown');
+const dropdownToggle = document.getElementById('dropdownToggle');
+const dropdownItems = formatDropdown.querySelectorAll('.dropdown-item');
+
+dropdownToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    formatDropdown.classList.toggle('open');
+});
+
+dropdownItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdownItems.forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+
+        dropdownToggle.textContent = item.textContent;
+        currentCalcFormat = item.dataset.value;
+        formatDropdown.classList.remove('open');
+
+        localStorage.setItem('dtr_calc_format', currentCalcFormat);
+        calculateAll();
+    });
+});
+
+/* Close dropdown on outside click */
+document.addEventListener('click', () => {
+    formatDropdown.classList.remove('open');
+});
+
+/* =========================================================
+   HIGHLIGHT CHECKBOX LOGIC
+   ========================================================= */
+
+const savedHighlight = localStorage.getItem('dtr_highlight_calc');
+if (savedHighlight === 'true') {
+    highlightToggle.checked = true;
+    document.body.classList.add('enable-highlights');
+}
+
+highlightToggle.addEventListener('change', () => {
+    if (highlightToggle.checked) {
+        document.body.classList.add('enable-highlights');
+        localStorage.setItem('dtr_highlight_calc', 'true');
+    } else {
+        document.body.classList.remove('enable-highlights');
+        localStorage.setItem('dtr_highlight_calc', 'false');
+    }
+});
+
+/* =========================================================
+   INITIAL LOAD
+   ========================================================= */
+
+const savedFormat = localStorage.getItem('dtr_calc_format');
+if (savedFormat) {
+    currentCalcFormat = savedFormat;
+    const activeItem = formatDropdown.querySelector(`[data-value="${savedFormat}"]`);
+    if (activeItem) {
+        dropdownItems.forEach(i => i.classList.remove('selected'));
+        activeItem.classList.add('selected');
+        dropdownToggle.textContent = activeItem.textContent;
+    }
+}
+
+loadSavedData();
+calculateAll();
+
+/* =========================================================
+   CELL CLICK LISTENERS
+   ========================================================= */
+
+function attachCellClickListeners() {
+    document.querySelectorAll('.time-entry-row').forEach(cell => {
+        cell.onclick = (e) => {
+            e.stopPropagation();
+
+            const targetSpan = e.target.closest('.input-part');
+            
+            if (activeCell === cell) {
+                if (targetSpan) {
+                    const part = targetSpan.dataset.part;
+                    if (part === 'hour') {
+                        editState.step = 'hour';
+                        editState.position = editState.hour.length === 0 ? 0 : 1;
+                    } else if (part === 'min') {
+                        editState.step = 'minute';
+                        editState.position = 2;
+                    } else if (part === 'ampm') {
+                        editState.step = 'ampm';
+                        editState.manualAmPm = true;
+                    }
+                    updateActiveDisplay();
+                    openNativeKeyboard();
+                }
+                return;
+            }
+
+            let initialStep = 'hour';
+            if (targetSpan) {
+                const part = targetSpan.dataset.part;
+                if (part === 'min') initialStep = 'minute';
+                else if (part === 'ampm') initialStep = 'ampm';
+            }
+
+            activateCell(cell, initialStep);
+        };
+    });
+}
+attachCellClickListeners();
+
+/* =========================================================
+   SUB-ROW ADDITION / REMOVAL
+   ========================================================= */
+
+function addSubRow(row, inCol, event) {
+    if (event) event.stopPropagation();
+
+    const outCol = inCol + 1;
+    const inContainer = document.getElementById(`container-${row}-${inCol}`);
+    const outContainer = document.getElementById(`container-${row}-${outCol}`);
+
+    const currentCount = inContainer.querySelectorAll('.time-entry-row').length;
+    if (currentCount >= 3) return;
+
+    const subIdx = currentCount;
+    const defaultAmpm = (inCol === 4) ? 'PM' : 'AM';
+
+    const newIn = document.createElement('div');
+    newIn.className = 'time-entry-row';
+    newIn.dataset.row = row;
+    newIn.dataset.col = inCol;
+    newIn.dataset.sub = subIdx;
+    newIn.innerHTML = `_:_ ${defaultAmpm} <button class="btn-remove-row" title="Remove entry" onclick="removeSubRow(${row}, ${inCol}, ${subIdx}, event)">-</button>`;
+
+    const newOut = document.createElement('div');
+    newOut.className = 'time-entry-row';
+    newOut.dataset.row = row;
+    newOut.dataset.col = outCol;
+    newOut.dataset.sub = subIdx;
+    newOut.innerHTML = `_:_ ${defaultAmpm}`;
+
+    inContainer.appendChild(newIn);
+    outContainer.appendChild(newOut);
+
+    attachCellClickListeners();
+    activateCell(newIn);
+}
+
+function removeSubRow(row, inCol, subIdx, event) {
+    if (event) event.stopPropagation();
+
+    saveAndCloseActive();
+
+    const outCol = inCol + 1;
+
+    localStorage.removeItem(`dtr_time_${row}_${inCol}_${subIdx}`);
+    localStorage.removeItem(`dtr_time_${row}_${outCol}_${subIdx}`);
+
+    const inContainer = document.getElementById(`container-${row}-${inCol}`);
+    const outContainer = document.getElementById(`container-${row}-${outCol}`);
+
+    const inRows = Array.from(inContainer.querySelectorAll('.time-entry-row'));
+    const outRows = Array.from(outContainer.querySelectorAll('.time-entry-row'));
+
+    if (inRows[subIdx]) inRows[subIdx].remove();
+    if (outRows[subIdx]) outRows[subIdx].remove();
+
+    const updatedInRows = inContainer.querySelectorAll('.time-entry-row');
+    const updatedOutRows = outContainer.querySelectorAll('.time-entry-row');
+
+    updatedInRows.forEach((el, index) => {
+        el.dataset.sub = index;
+        const removeBtn = el.querySelector('.btn-remove-row');
+        if (removeBtn) {
+            removeBtn.setAttribute('onclick', `removeSubRow(${row}, ${inCol}, ${index}, event)`);
+        }
+        const val = localStorage.getItem(`dtr_time_${row}_${inCol}_${index}`);
+        if (!val) {
+            localStorage.setItem(`dtr_time_${row}_${inCol}_${index}`, el.textContent.trim());
+        }
+    });
+
+    updatedOutRows.forEach((el, index) => {
+        el.dataset.sub = index;
+    });
+
+    reindexLocalStorage(row, inCol);
+    reindexLocalStorage(row, outCol);
+
+    calculateRow(row);
+}
+
+function reindexLocalStorage(row, col) {
+    const container = document.getElementById(`container-${row}-${col}`);
+    const rows = container.querySelectorAll('.time-entry-row');
+    
+    for (let i = 0; i < 5; i++) {
+        localStorage.removeItem(`dtr_time_${row}_${col}_${i}`);
+    }
+
+    rows.forEach((el, index) => {
+        const txt = el.textContent.replace('-', '').trim();
+        if (txt && !txt.includes('_')) {
+            localStorage.setItem(`dtr_time_${row}_${col}_${index}`, txt);
+        }
+    });
+}
+
+/* =========================================================
+   CENTER ACTIVE CELL
+   ========================================================= */
+
+function centerEditingCell(cell) {
+    if (!cell || !tableContainer) return;
+
+    requestAnimationFrame(() => {
+        const containerRect = tableContainer.getBoundingClientRect();
+        const cellRect = cell.getBoundingClientRect();
+
+        const cellCenterX = (cellRect.left - containerRect.left) + tableContainer.scrollLeft + (cellRect.width / 2);
+        let targetScrollLeft = cellCenterX - (tableContainer.clientWidth / 2);
+
+        const maxScrollLeft = tableContainer.scrollWidth - tableContainer.clientWidth;
+        targetScrollLeft = Math.max(0, Math.min(targetScrollLeft, maxScrollLeft));
+
+        const cellCenterY = (cellRect.top - containerRect.top) + tableContainer.scrollTop + (cellRect.height / 2);
+        let targetScrollTop = cellCenterY - (tableContainer.clientHeight / 2);
+
+        const maxScrollTop = tableContainer.scrollHeight - tableContainer.clientHeight;
+        targetScrollTop = Math.max(0, Math.min(targetScrollTop, maxScrollTop));
+
+        tableContainer.scrollTo({
+            left: targetScrollLeft,
+            top: targetScrollTop,
+            behavior: 'smooth'
+        });
+    });
+}
+
+/* =========================================================
+   OUTSIDE CLICK
+   ========================================================= */
+
+document.addEventListener('click', e => {
+    if (!activeCell) return;
+
+    if (
+        !e.target.closest('.time-entry-row') &&
+        !e.target.closest('.btn-add-row') &&
+        !e.target.closest('.btn-remove-row') &&
+        !e.target.closest('#downloadModal') &&
+        !e.target.closest('#downloadBtn') &&
+        e.target !== nativeTimeInput
+    ) {
+        saveAndCloseActive();
+    }
+});
+
+/* =========================================================
+   MOBILE KEYBOARD HANDLERS
+   ========================================================= */
+
+function openNativeKeyboard() {
+    nativeTimeInput.value = '';
+    nativeTimeInput.focus({ preventScroll: true });
+}
+
+nativeTimeInput.addEventListener('input', () => {
+    if (!activeCell) {
+        nativeTimeInput.value = '';
+        return;
+    }
+
+    const digits = nativeTimeInput.value.replace(/\D/g, '');
+    nativeTimeInput.value = '';
+
+    for (const digit of digits) {
+        handleDigit(digit);
+    }
+});
+
+nativeTimeInput.addEventListener('blur', () => {
+    if (!activeCell) return;
+    setTimeout(() => {
+        if (activeCell) {
+            nativeTimeInput.focus({ preventScroll: true });
+        }
+    }, 50);
+});
+
+/* =========================================================
+   KEYBOARD NAVIGATION
+   ========================================================= */
+
+document.addEventListener('keydown', e => {
+    if (!activeCell) return;
+
+    /* TAB */
+    if (e.key === 'Tab') {
+        e.preventDefault();
+        saveAndCloseActive();
+
+        if (e.getModifierState && e.getModifierState('CapsLock')) {
+            navigateRows(e.shiftKey ? -1 : 1);
+        } else {
+            navigateCells(e.shiftKey ? -1 : 1);
+        }
+        return;
+    }
+
+    /* ENTER */
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        handleEnter();
+        return;
+    }
+
+    /* DELETE / BACKSPACE */
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        handleDelete();
+        return;
+    }
+
+    /* NUMBER DIGITS */
+    if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault();
+        handleDigit(e.key);
+        return;
+    }
+
+    /* AM/PM TOGGLE */
+    if (editState.step === 'ampm') {
+        e.preventDefault();
+        toggleAmPm();
+        return;
+    }
+});
+
+/* =========================================================
+   ENTER KEY LOGIC
+   ========================================================= */
+
+function handleEnter() {
+    if (!activeCell) return;
+
+    const now = Date.now();
+    if (now - lastEnterTime <= ENTER_WINDOW) {
+        enterCount++;
+    } else {
+        enterCount = 1;
+    }
+
+    lastEnterTime = now;
+
+    if (enterCount >= 2) {
+        saveAndCloseActive();
+        navigateCells(1);
+        enterCount = 0;
+        lastEnterTime = 0;
+        return;
+    }
+
+    if (editState.step === 'hour') {
+        editState.position = 2;
+        editState.step = 'minute';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.step === 'minute') {
+        editState.step = 'ampm';
+        if (editState.min === '') {
+            editState.position = 4;
+        }
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.step === 'ampm') {
+        saveAndCloseActive();
+        navigateCells(1);
+        enterCount = 0;
+        lastEnterTime = 0;
+        return;
+    }
+}
+
+/* =========================================================
+   DIGIT HANDLING
+   ========================================================= */
+
+function handleDigit(digit) {
+    if (!activeCell) return;
+
+    if (editState.isInvalid) return;
+
+    enterCount = 0;
+    lastEnterTime = 0;
+
+    if (editState.step === 'ampm') {
+        toggleAmPm();
+        return;
+    }
+
+    if (!editState.hasTyped && editState.step === 'hour') {
+        editState.hasTyped = true;
+        editState.hour = '';
+        editState.min = '';
+        editState.position = 0;
+        editState.step = 'hour';
+    } else if (!editState.hasTyped && editState.step === 'minute') {
+        editState.hasTyped = true;
+        editState.position = 2;
+    }
+
+    if (editState.position === 0) {
+        editState.hour = digit;
+        editState.position = 1;
+        editState.step = 'hour';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 1) {
+        editState.hour += digit;
+        editState.position = 2;
+        editState.step = 'hour';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 2) {
+        editState.min = digit;
+        editState.position = 3;
+        editState.step = 'minute';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 3) {
+        editState.min += digit;
+        editState.position = 4;
+        editState.step = 'minute';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 4) {
+        const digitForNextCell = digit;
+        const currentRow = editState.row;
+        const currentCol = editState.col;
+        const currentSub = editState.subIndex;
+
+        saveAndCloseActive();
+
+        navigateCellsFrom(currentRow, currentCol, currentSub, 1);
+
+        if (activeCell) {
+            handleDigit(digitForNextCell);
+        }
+        return;
+    }
+}
+
+/* =========================================================
+   DELETE / BACKWARD LOGIC
+   ========================================================= */
+
+function handleDelete(fromCellSwitch = false) {
+    if (!activeCell) return;
+
+    enterCount = 0;
+    lastEnterTime = 0;
+
+    if (fromCellSwitch) {
+        if (editState.originalValue) {
+            const parts = editState.originalValue.split(' ');
+            const timeParts = (parts[0] || '').split(':');
+            editState.hour = timeParts[0] || '';
+            editState.min = timeParts[1] || '';
+            editState.ampm = parts[1] || ((editState.col === 4 || editState.col === 5) ? 'PM' : 'AM');
+        } else {
+            editState.hour = '';
+            editState.min = '';
+        }
+
+        editState.hasTyped = true;
+
+        if (editState.min.length > 0) {
+            editState.min = editState.min.slice(0, -1);
+        }
+
+        editState.position = 3;
+        editState.step = 'minute';
+
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.step === 'ampm') {
+        editState.step = 'minute';
+        editState.manualAmPm = false;
+        editState.position = 4;
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 4) {
+        if (editState.min.length > 0) {
+            editState.min = editState.min.slice(0, -1);
+        }
+        editState.position = 3;
+        editState.step = 'minute';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 3) {
+        editState.min = '';
+        editState.position = 2;
+        editState.step = 'minute';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 2) {
+        if (editState.hour.length >= 2) {
+            editState.hour = editState.hour.slice(0, 1);
+        } else if (editState.hour.length === 1) {
+            editState.hour = '';
+        }
+        editState.position = 1;
+        editState.step = 'hour';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 1) {
+        editState.hour = '';
+        editState.position = 0;
+        editState.step = 'hour';
+        updateActiveDisplay();
+        return;
+    }
+
+    if (editState.position === 0) {
+        editState.hour = '';
+        saveAndCloseActive();
+        moveToPreviousCell(true);
+        return;
+    }
+}
+
+/* =========================================================
+   AM / PM TOGGLE
+   ========================================================= */
+
+function toggleAmPm() {
+    editState.hasTyped = true;
+    editState.manualAmPm = true;
+    editState.ampm = editState.ampm === 'AM' ? 'PM' : 'AM';
+    updateActiveDisplay();
+}
+
+/* =========================================================
+   CELL ACTIVATION
+   ========================================================= */
+
+function activateCell(cell, initialStep = 'hour') {
+    if (activeCell && activeCell !== cell) {
+        saveAndCloseActive();
+    }
+
+    document.querySelectorAll('.time-cell-container.is-selected').forEach(c => {
+        c.classList.remove('is-selected');
+    });
+
+    activeCell = cell;
+
+    const row = parseInt(cell.dataset.row, 10);
+    const col = parseInt(cell.dataset.col, 10);
+    const sub = parseInt(cell.dataset.sub, 10);
+
+    const pairedCol = (col === 1 || col === 4) ? col : col - 1;
+    const pairedOutCol = pairedCol + 1;
+
+    const inContainer = document.getElementById(`container-${row}-${pairedCol}`);
+    const outContainer = document.getElementById(`container-${row}-${pairedOutCol}`);
+
+    if (inContainer) inContainer.classList.add('is-selected');
+    if (outContainer) outContainer.classList.add('is-selected');
+
+    const defaultAmpm = (col === 4 || col === 5) ? 'PM' : 'AM';
+
+    const existingKey = `dtr_time_${row}_${col}_${sub}`;
+    const existing = localStorage.getItem(existingKey);
+
+    let existingAmpm = defaultAmpm;
+    let initialHour = '';
+    let initialMin = '';
+
+    if (existing && !existing.includes('_')) {
+        const parts = existing.split(' ');
+        existingAmpm = parts[1] || defaultAmpm;
+        const timeParts = (parts[0] || '').split(':');
+        initialHour = timeParts[0] || '';
+        initialMin = timeParts[1] || '';
+    }
+
+    let startPos = 0;
+    if (initialStep === 'minute') {
+        startPos = 2;
+    } else if (initialStep === 'ampm') {
+        startPos = 4;
+    }
+
+    editState = {
+        row: row,
+        col: col,
+        subIndex: sub,
+
+        originalValue: (existing && !existing.includes('_')) ? existing : null,
+
+        hour: initialHour,
+        min: initialMin,
+        ampm: existingAmpm,
+
+        step: initialStep,
+        position: startPos,
+        hasTyped: false,
+        manualAmPm: false,
+        isInvalid: false
+    };
+
+    enterCount = 0;
+    lastEnterTime = 0;
+
+    showExistingValueWithHighlight();
+    centerEditingCell(cell);
+
+    setTimeout(() => {
+        if (activeCell === cell) {
+            openNativeKeyboard();
+        }
+    }, 0);
+}
+
+/* =========================================================
+   AUTO SMART AM/PM SWITCH FOR TIME OUT & TIME IN
+   ========================================================= */
+
+function autoAdjustAmPmForTimeOut() {
+    if (editState.manualAmPm) return;
+
+    // FOR AM SECTION (Col 1: In, Col 2: Out) -> Adjust Time Out (Col 2)
+    if (editState.col === 2) {
+        const inCol = 1;
+        const inVal = localStorage.getItem(`dtr_time_${editState.row}_${inCol}_${editState.subIndex}`);
+        if (!inVal || inVal.includes('_')) return;
+
+        const inMins = timeToMinutes(inVal);
+        if (inMins === null) return;
+
+        const hVal = parseInt(editState.hour, 10);
+        const mVal = parseInt(editState.min, 10) || 0;
+
+        if (isNaN(hVal) || hVal < 1 || hVal > 12) return;
+
+        let testMins = timeToMinutes(`${String(hVal).padStart(2, '0')}:${String(mVal).padStart(2, '0')} ${editState.ampm}`);
+        if (testMins === null) return;
+
+        let diff = testMins - inMins;
+
+        if (diff < 0 || diff > 720) {
+            editState.ampm = editState.ampm === 'AM' ? 'PM' : 'AM';
+        }
+    } 
+
+    // FOR PM SECTION (Col 4: In, Col 5: Out) -> Adjust Time In (Col 4)
+    else if (editState.col === 4) {
+        const outCol = 5;
+        const outVal = localStorage.getItem(`dtr_time_${editState.row}_${outCol}_${editState.subIndex}`);
+        if (!outVal || outVal.includes('_')) return;
+
+        const outMins = timeToMinutes(outVal);
+        if (outMins === null) return;
+
+        const hVal = parseInt(editState.hour, 10);
+        const mVal = parseInt(editState.min, 10) || 0;
+
+        if (isNaN(hVal) || hVal < 1 || hVal > 12) return;
+
+        let testMins = timeToMinutes(`${String(hVal).padStart(2, '0')}:${String(mVal).padStart(2, '0')} ${editState.ampm}`);
+        if (testMins === null) return;
+
+        let diff = outMins - testMins;
+
+        if (diff < 0 || diff > 720) {
+            editState.ampm = editState.ampm === 'PM' ? 'AM' : 'PM';
+        }
+    }
+}
+
+/* =========================================================
+   DISPLAY VALUE INITIALIZATION
+   ========================================================= */
+
+function showExistingValueWithHighlight() {
+    if (!activeCell) return;
+
+    const removeBtnHtml = renderRemoveButton();
+
+    let hourClass = editState.step === 'hour' ? 'editing' : '';
+    let minClass = editState.step === 'minute' ? 'editing' : '';
+    let ampmClass = editState.step === 'ampm' ? 'editing' : '';
+
+    if (!editState.originalValue) {
+        activeCell.innerHTML = `
+            <span class="input-part ${hourClass}" data-part="hour">_</span>
+            <span class="input-part separator">:</span>
+            <span class="input-part ${minClass}" data-part="min">_</span>
+            <span class="input-part separator">&nbsp;</span>
+            <span class="input-part ${ampmClass}" data-part="ampm">${editState.ampm}</span>
+            ${removeBtnHtml}
+        `;
+        return;
+    }
+
+    const parts = editState.originalValue.split(' ');
+    const time = parts[0];
+    const ampm = parts[1] || editState.ampm;
+    const timeParts = time.split(':');
+
+    const h = timeParts[0] || '_';
+    const m = timeParts[1] || '_';
+
+    activeCell.innerHTML = `
+        <span class="input-part ${hourClass}" data-part="hour">${h}</span>
+        <span class="input-part separator">:</span>
+        <span class="input-part ${minClass}" data-part="min">${m}</span>
+        <span class="input-part separator">&nbsp;</span>
+        <span class="input-part ${ampmClass}" data-part="ampm">${ampm}</span>
+        ${removeBtnHtml}
+    `;
+}
+
+function renderRemoveButton() {
+    if (editState.subIndex > 0 && (editState.col === 1 || editState.col === 4)) {
+        return `<button class="btn-remove-row" title="Remove entry" onclick="removeSubRow(${editState.row}, ${editState.col}, ${editState.subIndex}, event)">-</button>`;
+    }
+    return '';
+}
+
+/* =========================================================
+   UPDATE CELL DISPLAY DURING EDITING
+   ========================================================= */
+
+function updateActiveDisplay() {
+    if (!activeCell) return;
+
+    autoAdjustAmPmForTimeOut();
+
+    if (!editState.hasTyped) {
+        showExistingValueWithHighlight();
+        return;
+    }
+
+    /* VALIDATION HIGHLIGHT */
+    editState.isInvalid = false;
+
+    if (editState.step === 'hour') {
+        if (editState.hour.length === 2) {
+            const hVal = parseInt(editState.hour, 10);
+            if (isNaN(hVal) || hVal > 12 || hVal === 0) {
+                editState.isInvalid = true;
+            }
+        }
+    } else if (editState.step === 'minute') {
+        if (editState.min.length === 2) {
+            const mVal = parseInt(editState.min, 10);
+            if (isNaN(mVal) || mVal > 59) {
+                editState.isInvalid = true;
+            }
+        }
+    }
+
+    const h = editState.position === 1 ? editState.hour.padEnd(2, '_') : editState.hour.padStart(2, '_');
+    const m = editState.min.padEnd(2, '_');
+
+    let hourClass = '';
+    let minuteClass = '';
+    let ampmClass = '';
+
+    if (editState.step === 'hour') {
+        hourClass = editState.isInvalid ? 'editing error' : 'editing';
+    }
+
+    if (editState.step === 'minute') {
+        minuteClass = editState.isInvalid ? 'editing error' : 'editing';
+    }
+
+    if (editState.step === 'ampm') {
+        ampmClass = 'editing';
+    }
+
+    const removeBtnHtml = renderRemoveButton();
+
+    activeCell.innerHTML = `
+        <span class="input-part ${hourClass}" data-part="hour">${h}</span>
+        <span class="input-part separator">:</span>
+        <span class="input-part ${minuteClass}" data-part="min">${m}</span>
+        <span class="input-part separator">&nbsp;</span>
+        <span class="input-part ${ampmClass}" data-part="ampm">${editState.ampm}</span>
+        ${removeBtnHtml}
+    `;
+}
+
+/* =========================================================
+   SAVE CELL ENTRY
+   ========================================================= */
+
+function saveAndCloseActive() {
+    if (!activeCell) return;
+
+    const row = editState.row;
+    const col = editState.col;
+    const sub = editState.subIndex;
+
+    const removeBtnHtml = renderRemoveButton();
+
+    if (!editState.hasTyped) {
+        if (editState.originalValue) {
+            activeCell.innerHTML = `${editState.originalValue} ${removeBtnHtml}`;
+        } else {
+            const defaultAmpm = (col === 4 || col === 5) ? 'PM' : 'AM';
+            activeCell.innerHTML = `_:_ ${defaultAmpm} ${removeBtnHtml}`;
+        }
+
+        calculateRow(row);
+
+        document.querySelectorAll('.time-cell-container.is-selected').forEach(c => {
+            c.classList.remove('is-selected');
+        });
+
+        activeCell = null;
+        nativeTimeInput.blur();
+        return;
+    }
+
+    const trimmedHour = editState.hour.trim();
+    const trimmedMin = editState.min.trim();
+
+    // CLEAR ENTRY ON BLANK
+    if (trimmedHour === '' && trimmedMin === '') {
+        const defaultAmpm = (col === 4 || col === 5) ? 'PM' : 'AM';
+        activeCell.innerHTML = `_:_ ${defaultAmpm} ${removeBtnHtml}`;
+        localStorage.removeItem(`dtr_time_${row}_${col}_${sub}`);
+        calculateRow(row);
+
+        document.querySelectorAll('.time-cell-container.is-selected').forEach(c => {
+            c.classList.remove('is-selected');
+        });
+
+        activeCell = null;
+        nativeTimeInput.blur();
+        return;
+    }
+
+    let h = parseInt(trimmedHour, 10);
+    let m = parseInt(trimmedMin, 10);
+
+    if (isNaN(h) || h < 1 || h > 12) h = 8;
+    if (isNaN(m) || m < 0 || m > 59) m = 0;
+
+    const formattedTime = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${editState.ampm}`;
+
+    activeCell.innerHTML = `${formattedTime} ${removeBtnHtml}`;
+
+    localStorage.setItem(`dtr_time_${row}_${col}_${sub}`, formattedTime);
+
+    calculateRow(row);
+
+    document.querySelectorAll('.time-cell-container.is-selected').forEach(c => {
+        c.classList.remove('is-selected');
+    });
+
+    activeCell = null;
+    nativeTimeInput.blur();
+}
+
+/* =========================================================
+   GET CELL HELPER
+   ========================================================= */
+
+function getCell(row, col, sub = 0) {
+    return document.querySelector(`[data-row="${row}"][data-col="${col}"][data-sub="${sub}"]`);
+}
+
+/* =========================================================
+   NAVIGATION HELPERS
+   ========================================================= */
+
+function navigateCells(direction) {
+    if (!editState.row) return;
+    navigateCellsFrom(editState.row, editState.col, editState.subIndex, direction);
+}
+
+function navigateCellsFrom(row, col, sub, direction) {
+    let r = row;
+    let c = col;
+    let s = sub;
+
+    const currentContainer = document.getElementById(`container-${r}-${c}`);
+    const subCount = currentContainer ? currentContainer.querySelectorAll('.time-entry-row').length : 1;
+
+    if (direction > 0) {
+        if (s + 1 < subCount) {
+            s += 1;
+        } else {
+            s = 0;
+            let colIndex = timeCols.indexOf(c) + 1;
+            if (colIndex < timeCols.length) {
+                c = timeCols[colIndex];
+            } else {
+                c = timeCols[0];
+                r = r < totalRows ? r + 1 : 1;
+            }
+        }
+    } else {
+        if (s > 0) {
+            s -= 1;
+        } else {
+            let colIndex = timeCols.indexOf(c) - 1;
+            if (colIndex >= 0) {
+                c = timeCols[colIndex];
+            } else {
+                c = timeCols[timeCols.length - 1];
+                r = r > 1 ? r - 1 : totalRows;
+            }
+            const prevContainer = document.getElementById(`container-${r}-${c}`);
+            const prevSubCount = prevContainer ? prevContainer.querySelectorAll('.time-entry-row').length : 1;
+            s = prevSubCount - 1;
+        }
+    }
+
+    let nextCell = getCell(r, c, s);
+    if (!nextCell) {
+        nextCell = getCell(r, c, 0);
+    }
+
+    if (nextCell) {
+        activateCell(nextCell);
+    }
+}
+
+function navigateRows(direction) {
+    if (!editState.row) return;
+
+    let r = editState.row + direction;
+    if (r < 1) r = totalRows;
+    if (r > totalRows) r = 1;
+
+    let nextCell = getCell(r, editState.col, editState.subIndex);
+    if (!nextCell) {
+        nextCell = getCell(r, editState.col, 0);
+    }
+
+    if (nextCell) {
+        activateCell(nextCell);
+    }
+}
+
+function moveToPreviousCell(andDelete = false) {
+    const row = editState.row;
+    const col = editState.col;
+    const sub = editState.subIndex;
+
+    saveAndCloseActive();
+
+    navigateCellsFrom(row, col, sub, -1);
+
+    if (activeCell && andDelete) {
+        handleDelete(true);
+    }
+}
+
+/* =========================================================
+   RESET ALL
+   ========================================================= */
+
+resetBtn.addEventListener('click', () => {
+    if (confirm("Are you sure you want to reset all time entries?")) {
+        for (let i = 1; i <= totalRows; i++) {
+            for (const col of timeCols) {
+                for (let s = 0; s < 5; s++) {
+                    localStorage.removeItem(`dtr_time_${i}_${col}_${s}`);
+                }
+            }
+        }
+
+        for (let i = 1; i <= totalRows; i++) {
+            [1, 4].forEach(inCol => {
+                const outCol = inCol + 1;
+                const inContainer = document.getElementById(`container-${i}-${inCol}`);
+                const outContainer = document.getElementById(`container-${i}-${outCol}`);
+
+                const defaultAmpm = (inCol === 4) ? 'PM' : 'AM';
+
+                inContainer.innerHTML = `
+                    <button class="btn-add-row" title="Add entry" onclick="addSubRow(${i}, ${inCol}, event)">+</button>
+                    <div class="time-entry-row" data-row="${i}" data-col="${inCol}" data-sub="0">_:_ ${defaultAmpm}</div>
+                `;
+
+                outContainer.innerHTML = `
+                    <div class="time-entry-row" data-row="${i}" data-col="${outCol}" data-sub="0">_:_ ${defaultAmpm}</div>
+                `;
+            });
+        }
+
+        attachCellClickListeners();
+        activeCell = null;
+        nativeTimeInput.blur();
+        calculateAll();
+    }
+});
+
+/* =========================================================
+   LOAD SAVED DATA
+   ========================================================= */
+
+function loadSavedData() {
+    for (let i = 1; i <= totalRows; i++) {
+        [1, 4].forEach(inCol => {
+            const outCol = inCol + 1;
+
+            let maxSub = 0;
+            for (let s = 0; s < 5; s++) {
+                if (
+                    localStorage.getItem(`dtr_time_${i}_${inCol}_${s}`) ||
+                    localStorage.getItem(`dtr_time_${i}_${outCol}_${s}`)
+                ) {
+                    maxSub = s;
+                }
+            }
+
+            for (let s = 1; s <= maxSub; s++) {
+                const inContainer = document.getElementById(`container-${i}-${inCol}`);
+                const outContainer = document.getElementById(`container-${i}-${outCol}`);
+
+                const defaultAmpm = (inCol === 4) ? 'PM' : 'AM';
+
+                const newIn = document.createElement('div');
+                newIn.className = 'time-entry-row';
+                newIn.dataset.row = i;
+                newIn.dataset.col = inCol;
+                newIn.dataset.sub = s;
+                newIn.innerHTML = `_:_ ${defaultAmpm} <button class="btn-remove-row" title="Remove entry" onclick="removeSubRow(${i}, ${inCol}, ${s}, event)">-</button>`;
+
+                const newOut = document.createElement('div');
+                newOut.className = 'time-entry-row';
+                newOut.dataset.row = i;
+                newOut.dataset.col = outCol;
+                newOut.dataset.sub = s;
+                newOut.innerHTML = `_:_ ${defaultAmpm}`;
+
+                inContainer.appendChild(newIn);
+                outContainer.appendChild(newOut);
+            }
+
+            for (let s = 0; s <= maxSub; s++) {
+                const savedIn = localStorage.getItem(`dtr_time_${i}_${inCol}_${s}`);
+                const savedOut = localStorage.getItem(`dtr_time_${i}_${outCol}_${s}`);
+
+                const inCell = getCell(i, inCol, s);
+                const outCell = getCell(i, outCol, s);
+
+                if (savedIn && inCell) {
+                    const btn = (s > 0) ? `<button class="btn-remove-row" title="Remove entry" onclick="removeSubRow(${i}, ${inCol}, ${s}, event)">-</button>` : '';
+                    inCell.innerHTML = `${savedIn} ${btn}`;
+                }
+
+                if (savedOut && outCell) {
+                    outCell.textContent = savedOut;
+                }
+            }
+        });
+    }
+
+    attachCellClickListeners();
+}
+
+/* =========================================================
+   TIME CONVERSION & CALCULATION
+   ========================================================= */
+
+function timeToMinutes(timeStr) {
+    if (!timeStr || timeStr.includes('_')) return null;
+
+    const parts = timeStr.trim().split(' ');
+    const timeParts = parts[0].split(':');
+
+    let h = parseInt(timeParts[0], 10);
+    const m = parseInt(timeParts[1], 10);
+    const ap = parts[1] ? parts[1].toUpperCase() : 'AM';
+
+    if (ap === 'PM' && h < 12) h += 12;
+    if (ap === 'AM' && h === 12) h = 0;
+
+    return h * 60 + m;
+}
+
+/* UPDATED: OMITS ZERO HOURS AND ZERO MINUTES */
+function formatHours(totalMins, format) {
+    if (totalMins <= 0) {
+        return format === 'decimal' ? '0h' : '0h';
+    }
+
+    const hrs = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+
+    if (format === 'decimal') {
+        const decimalVal = parseFloat((totalMins / 60).toFixed(2));
+        return `${decimalVal}h`;
+    }
+
+    let parts = [];
+    if (hrs > 0) parts.push(`${hrs}h`);
+    if (mins > 0) parts.push(`${mins}m`);
+
+    return parts.length > 0 ? parts.join(' ') : '0h';
+}
+
+function renderHoursGrid(subHours, totalMins, format) {
+    let itemsHtml = '';
+
+    subHours.forEach(h => {
+        itemsHtml += `<div class="hours-grid-item">${h || '-'}</div>`;
+    });
+
+    return `
+        <div class="hours-grid">
+            <div class="hours-grid-list">
+                ${itemsHtml}
+            </div>
+            <div class="hours-grid-total">
+                ${formatHours(totalMins, format)}
+            </div>
+        </div>
+    `;
+}
+
+function calculateRow(row) {
+    const format = currentCalcFormat;
+
+    let morningMinsTotal = 0;
+    let afternoonMinsTotal = 0;
+
+    let morningSubHours = [];
+    let afternoonSubHours = [];
+
+    const amInContainer = document.getElementById(`container-${row}-1`);
+    const amSubCount = amInContainer ? amInContainer.querySelectorAll('.time-entry-row').length : 1;
+
+    for (let s = 0; s < amSubCount; s++) {
+        const inStr = localStorage.getItem(`dtr_time_${row}_1_${s}`);
+        const outStr = localStorage.getItem(`dtr_time_${row}_2_${s}`);
+
+        const inMins = timeToMinutes(inStr);
+        const outMins = timeToMinutes(outStr);
+
+        if (inMins !== null && outMins !== null && outMins >= inMins) {
+            const diff = outMins - inMins;
+            morningMinsTotal += diff;
+            morningSubHours.push(formatHours(diff, format));
+        } else {
+            morningSubHours.push('');
+        }
+    }
+
+    const pmInContainer = document.getElementById(`container-${row}-4`);
+    const pmSubCount = pmInContainer ? pmInContainer.querySelectorAll('.time-entry-row').length : 1;
+
+    for (let s = 0; s < pmSubCount; s++) {
+        const inStr = localStorage.getItem(`dtr_time_${row}_4_${s}`);
+        const outStr = localStorage.getItem(`dtr_time_${row}_5_${s}`);
+
+        const inMins = timeToMinutes(inStr);
+        const outMins = timeToMinutes(outStr);
+
+        if (inMins !== null && outMins !== null && outMins >= inMins) {
+            const diff = outMins - inMins;
+            afternoonMinsTotal += diff;
+            afternoonSubHours.push(formatHours(diff, format));
+        } else {
+            afternoonSubHours.push('');
+        }
+    }
+
+    const totalRowMins = morningMinsTotal + afternoonMinsTotal;
+
+    const col3Cell = document.querySelector(`[data-row="${row}"][data-col="3"]`);
+    if (col3Cell) {
+        if (morningMinsTotal > 0) {
+            if (morningSubHours.length > 1) {
+                col3Cell.innerHTML = renderHoursGrid(morningSubHours, morningMinsTotal, format);
+            } else {
+                col3Cell.textContent = formatHours(morningMinsTotal, format);
+            }
+        } else {
+            col3Cell.textContent = '';
+        }
+    }
+
+    const col6Cell = document.querySelector(`[data-row="${row}"][data-col="6"]`);
+    if (col6Cell) {
+        if (afternoonMinsTotal > 0) {
+            if (afternoonSubHours.length > 1) {
+                col6Cell.innerHTML = renderHoursGrid(afternoonSubHours, afternoonMinsTotal, format);
+            } else {
+                col6Cell.textContent = formatHours(afternoonMinsTotal, format);
+            }
+        } else {
+            col6Cell.textContent = '';
+        }
+    }
+
+    const col7Cell = document.querySelector(`[data-row="${row}"][data-col="7"]`);
+    if (col7Cell) {
+        col7Cell.textContent = totalRowMins > 0 ? formatHours(totalRowMins, format) : '';
+    }
+
+    calculateGrandTotal();
+}
+
+function calculateAll() {
+    for (let i = 1; i <= totalRows; i++) {
+        calculateRow(i);
+    }
+}
+
+function calculateGrandTotal() {
+    const format = currentCalcFormat;
+    let grandTotalMins = 0;
+
+    for (let i = 1; i <= totalRows; i++) {
+        [1, 4].forEach(inCol => {
+            const outCol = inCol + 1;
+            const container = document.getElementById(`container-${i}-${inCol}`);
+            const count = container ? container.querySelectorAll('.time-entry-row').length : 1;
+
+            for (let s = 0; s < count; s++) {
+                const inStr = localStorage.getItem(`dtr_time_${i}_${inCol}_${s}`);
+                const outStr = localStorage.getItem(`dtr_time_${i}_${outCol}_${s}`);
+
+                const inM = timeToMinutes(inStr);
+                const outM = timeToMinutes(outStr);
+
+                if (inM !== null && outM !== null && outM >= inM) {
+                    grandTotalMins += (outM - inM);
+                }
+            }
+        });
+    }
+
+    document.getElementById('grand-total').textContent = formatHours(grandTotalMins, format);
+}
+
+/* =========================================================
+   DOWNLOAD TABLE AS IMAGE (WITH MODAL LOGIC)
+   ========================================================= */
+
+const downloadBtn = document.getElementById('downloadBtn');
+const downloadModal = document.getElementById('downloadModal');
+const userNameInput = document.getElementById('userNameInput');
+const cancelModalBtn = document.getElementById('cancelModalBtn');
+const confirmDownloadBtn = document.getElementById('confirmDownloadBtn');
+
+// Open modal on click
+downloadBtn.addEventListener('click', () => {
+    saveAndCloseActive(); // Close active cell input if active
+    const savedName = localStorage.getItem('dtr_user_name') || '';
+    userNameInput.value = savedName;
+    downloadModal.classList.add('active');
+    userNameInput.focus();
+});
+
+// Close Modal
+function closeModal() {
+    downloadModal.classList.remove('active');
+}
+
+cancelModalBtn.addEventListener('click', closeModal);
+
+downloadModal.addEventListener('click', (e) => {
+    if (e.target === downloadModal) {
+        closeModal();
+    }
+});
+
+userNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        confirmDownloadBtn.click();
+    }
+});
+
+// Confirm download execution
+confirmDownloadBtn.addEventListener('click', () => {
+    const rawName = userNameInput.value.trim();
+    if (rawName) {
+        localStorage.setItem('dtr_user_name', rawName);
+    }
+
+    closeModal();
+
+    // Hide control UI elements temporarily to prevent showing in captured image
+    document.querySelectorAll('.btn-add-row, .btn-remove-row').forEach(b => b.style.visibility = 'hidden');
+
+    // Clean up empty placeholder inputs ("_:_ AM", "_:_ PM") for snapshot
+    const originalCellContents = [];
+    document.querySelectorAll('.time-entry-row').forEach(cell => {
+        if (cell.textContent.includes('_:_')) {
+            originalCellContents.push({ element: cell, html: cell.innerHTML });
+            cell.innerHTML = ''; // Temporarily clear placeholder text for pristine capture
+        }
+    });
+
+    const tableElement = document.getElementById('dtrTable');
+
+    // Execute Image Rendering
+    html2canvas(tableElement, {
+        scale: 2, // High resolution image output
+        backgroundColor: '#ffffff'
+    }).then(canvas => {
+        // Restore control buttons visibility
+        document.querySelectorAll('.btn-add-row, .btn-remove-row').forEach(b => b.style.visibility = '');
+
+        // Restore placeholder contents back to table
+        originalCellContents.forEach(item => {
+            item.element.innerHTML = item.html;
+        });
+
+        const image = canvas.toDataURL('image/jpeg', 0.95);
+        
+        // Format file name
+        let formattedName = rawName ? rawName.replace(/\s+/g, '_') : 'Record';
+        const fileName = `DTR_${formattedName}.jpg`;
+
+        // Trigger automatic image download
+        const downloadLink = document.createElement('a');
+        downloadLink.href = image;
+        downloadLink.download = fileName;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+    }).catch(err => {
+        // Restore controls and contents on failure
+        document.querySelectorAll('.btn-add-row, .btn-remove-row').forEach(b => b.style.visibility = '');
+        originalCellContents.forEach(item => {
+            item.element.innerHTML = item.html;
+        });
+        alert('Failed to generate image download.');
+        console.error(err);
+    });
+});
+
+</script>
+
+</body>
+</html>
