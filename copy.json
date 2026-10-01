@@ -27,6 +27,6 @@
   {
     "id": 1790818027501,
     "title": "root",
-    "content": "&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" shell<div><br></div>"
+    "content": "&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" shell<div><br></div><div>&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" shell \"su -c cp -r /data/data/com.mindtwisted.kanjistudy /sdcard/Download/\"</div><div><br></div>"
   }
 ]
