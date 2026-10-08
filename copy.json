@@ -28,5 +28,10 @@
     "id": 1790818027501,
     "title": "root",
     "content": "&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" shell<div><br></div><div>&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" shell \"su -c cp -r /data/data/com.mindtwisted.kanjistudy /sdcard/Download/\"</div><div><br></div><div>cp -r /data/data/com.mindtwisted.kanjistudy /sdcard/Download/</div><div><br></div><div>chmod -R 777 /sdcard/Download/com.mindtwisted.kanjistudy</div><div><br></div><div>&amp; \"$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe\" pull /sdcard/Download/com.mindtwisted.kanjistudy C:\\Users\\USER\\Desktop\\</div><div><br></div>"
+  },
+  {
+    "id": 1791439546599,
+    "title": "Science and Technology",
+    "content": ""
   }
 ]
