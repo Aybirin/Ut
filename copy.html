@@ -161,151 +161,169 @@
 
   <div id="notes-container"></div>
 
-  <script>
-    const REPO_OWNER = "Aybirin";
-    const REPO_NAME = "Ut";
-    const FILE_PATH = "copy.json";
-    const GITHUB_TOKEN = ["github_pat_", "11BU7EYPY0NIeDA3MPMrKU", "_axecM0wHCQziWUqpQ4gd9PBAJmF5S01hi2rXmyIN0ZvCPMH4DTN", "ZTBpLGtO"].join("");
+<script>
+  const REPO_OWNER = "Aybirin";
+  const REPO_NAME = "Ut";
+  const FILE_PATH = "copy.json";
+  // Note: Avoid hardcoding sensitive API tokens in client-side HTML files.
+  const GITHUB_TOKEN = ["github_pat_", "11BU7EYPY0NIeDA3MPMrKU", "_axecM0wHCQziWUqpQ4gd9PBAJmF5S01hi2rXmyIN0ZvCPMH4DTN", "ZTBpLGtO"].join("");
 
-    let notesData = [];
-    let fileSha = "";
-    
-    let openFolders = {}; 
-    let focusedFolderId = null; 
-    let saveTimeout = null;
+  let notesData = [];
+  let fileSha = "";
+  
+  let openFolders = {}; 
+  let focusedFolderId = null; 
+  let saveTimeout = null;
+  let isSaving = false;
 
-    // Light/Dark Theme Switcher
-    function toggleTheme() {
-      const html = document.documentElement;
-      const btn = document.getElementById("theme-toggle-btn");
-      if (html.getAttribute("data-theme") === "dark") {
-        html.setAttribute("data-theme", "light");
-        btn.innerHTML = "☀️ Light Mode";
-      } else {
-        html.setAttribute("data-theme", "dark");
-        btn.innerHTML = "🌙 Dark Mode";
-      }
+  // Light/Dark Theme Switcher
+  function toggleTheme() {
+    const html = document.documentElement;
+    const btn = document.getElementById("theme-toggle-btn");
+    if (html.getAttribute("data-theme") === "dark") {
+      html.setAttribute("data-theme", "light");
+      btn.innerHTML = "☀️ Light Mode";
+    } else {
+      html.setAttribute("data-theme", "dark");
+      btn.innerHTML = "🌙 Dark Mode";
+    }
+  }
+
+  async function loadNotes() {
+    // Skip remote updates if user is focused on an editor, typing, or currently saving
+    if (focusedFolderId !== null || saveTimeout !== null || isSaving) {
+      return;
     }
 
-    async function loadNotes() {
-      try {
-        const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}?t=${Date.now()}`, {
-          headers: { Authorization: `token ${GITHUB_TOKEN}` }
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        fileSha = data.sha;
-        
-        const newData = JSON.parse(decodeURIComponent(escape(atob(data.content))));
-        
-        if (!focusedFolderId) {
-          notesData = newData;
-          render();
-        }
-      } catch (e) {
-        console.error("Failed to load notes", e);
-      }
-    }
-
-    async function saveNotes() {
-      const contentEncoded = btoa(unescape(encodeURIComponent(JSON.stringify(notesData, null, 2))));
-      try {
-        const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
-          method: "PUT",
-          headers: {
-            Authorization: `token ${GITHUB_TOKEN}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            message: "Live update copy.json notes",
-            content: contentEncoded,
-            sha: fileSha
-          })
-        });
-        const resData = await res.json();
-        if (resData.content) {
-            fileSha = resData.content.sha;
-        }
-      } catch (e) {
-        console.error("Failed to save to GitHub", e);
-      }
-    }
-
-    function render() {
-      document.querySelectorAll('details').forEach(details => {
-        const id = details.getAttribute('data-id');
-        if (id) openFolders[id] = details.open;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}?t=${Date.now()}`, {
+        headers: { Authorization: `token ${GITHUB_TOKEN}` }
       });
-
-      const container = document.getElementById("notes-container");
-      container.innerHTML = "";
-
-      notesData.forEach((folder, index) => {
-        const folderEl = document.createElement("div");
-        folderEl.className = "folder";
-        
-        const isOpen = openFolders[folder.id] ? "open" : "";
-
-        // Using a contenteditable div instead of textarea to retain rich layout syntax (bold, paragraphs, etc.)
-        folderEl.innerHTML = `
-          <details data-id="${folder.id}" ${isOpen}>
-            <summary>
-              <span>📁 ${escapeHtml(folder.title)}</span>
-              <span style="font-size: 12px; color: var(--text-muted);">Click to toggle</span>
-            </summary>
-            <div class="folder-content">
-              <div 
-                class="word-editor"
-                contenteditable="true"
-                onfocus="focusedFolderId = ${folder.id}" 
-                onblur="focusedFolderId = null"
-                oninput="updateNote(${index}, this.innerHTML)"
-              >${folder.content || ''}</div>
-              <div class="status" id="status-${index}">Saved</div>
-            </div>
-          </details>
-        `;
-        container.appendChild(folderEl);
-      });
-    }
-
-    function addFolder() {
-      const input = document.getElementById("folder-title");
-      const title = input.value.trim();
-      if (!title) return;
-
-      const newId = Date.now();
-      notesData.push({ id: newId, title: title, content: "" });
-      openFolders[newId] = true;
-      input.value = "";
+      if (!res.ok) return;
+      const data = await res.json();
+      fileSha = data.sha;
       
-      render();
-      saveNotes();
+      const newData = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+      
+      // Only re-render if data has actually changed
+      if (JSON.stringify(notesData) !== JSON.stringify(newData)) {
+        notesData = newData;
+        render();
+      }
+    } catch (e) {
+      console.error("Failed to load notes", e);
     }
+  }
 
-    function updateNote(index, htmlContent) {
-      notesData[index].content = htmlContent;
-      const statusEl = document.getElementById(`status-${index}`);
+  async function saveNotes() {
+    isSaving = true;
+    const contentEncoded = btoa(unescape(encodeURIComponent(JSON.stringify(notesData, null, 2))));
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${FILE_PATH}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${GITHUB_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: "Live update copy.json notes",
+          content: contentEncoded,
+          sha: fileSha
+        })
+      });
+      const resData = await res.json();
+      if (resData.content) {
+        fileSha = resData.content.sha;
+      }
+    } catch (e) {
+      console.error("Failed to save to GitHub", e);
+    } finally {
+      isSaving = false;
+    }
+  }
+
+  function render() {
+    // Store current toggle state of open folders
+    document.querySelectorAll('details').forEach(details => {
+      const id = details.getAttribute('data-id');
+      if (id) openFolders[id] = details.open;
+    });
+
+    const container = document.getElementById("notes-container");
+    container.innerHTML = "";
+
+    notesData.forEach((folder, index) => {
+      const folderEl = document.createElement("div");
+      folderEl.className = "folder";
+      
+      const isOpen = openFolders[folder.id] ? "open" : "";
+
+      folderEl.innerHTML = `
+        <details data-id="${folder.id}" ${isOpen}>
+          <summary>
+            <span>📁 ${escapeHtml(folder.title)}</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Click to toggle</span>
+          </summary>
+          <div class="folder-content">
+            <div 
+              class="word-editor"
+              contenteditable="true"
+              onfocus="focusedFolderId = ${folder.id}" 
+              onblur="focusedFolderId = null"
+              oninput="updateNote(${index}, this.innerHTML)"
+            >${folder.content || ''}</div>
+            <div class="status" id="status-${index}">Saved</div>
+          </div>
+        </details>
+      `;
+      container.appendChild(folderEl);
+    });
+  }
+
+  function addFolder() {
+    const input = document.getElementById("folder-title");
+    const title = input.value.trim();
+    if (!title) return;
+
+    const newId = Date.now();
+    notesData.push({ id: newId, title: title, content: "" });
+    openFolders[newId] = true;
+    input.value = "";
+    
+    render();
+    saveNotes();
+  }
+
+  function updateNote(index, htmlContent) {
+    notesData[index].content = htmlContent;
+    const statusEl = document.getElementById(`status-${index}`);
+    if (statusEl) {
       statusEl.innerText = "Typing...";
       statusEl.style.color = "var(--accent)";
+    }
 
-      clearTimeout(saveTimeout);
-      
-      saveTimeout = setTimeout(() => {
+    clearTimeout(saveTimeout);
+    
+    saveTimeout = setTimeout(() => {
+      if (statusEl) {
         statusEl.innerText = "Saving to GitHub...";
-        saveNotes().then(() => {
+      }
+      saveNotes().then(() => {
+        if (statusEl) {
           statusEl.innerText = "Saved";
           statusEl.style.color = "var(--text-muted)";
-        });
-      }, 1000); 
-    }
+        }
+        saveTimeout = null;
+      });
+    }, 1000); 
+  }
 
-    function escapeHtml(str) {
-      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
 
-    loadNotes();
-    setInterval(loadNotes, 10000);
-  </script>
+  loadNotes();
+  setInterval(loadNotes, 10000);
+</script>
 </body>
 </html>
