@@ -7,7 +7,7 @@
   {
     "id": 1788930060340,
     "title": "jh",
-    "content": "// Replace '.your-class-name' or 'tag' with the actual HTML selectors for your items<div>const col1 = document.querySelector('.title-class')?.innerText || '';</div><div>const col2 = document.querySelector('.price-class')?.innerText || '';</div><div>const col3 = document.querySelector('.description-class')?.innerText || '';</div><div><br></div><div>// Combines items into a single tab-separated line (Paste directly into Excel)</div><div>const rowData = [col1, col2, col3].join('\\t');</div><div>console.log(rowData);</div><div>copy(rowData); // Copies the output directly to your clipboard</div><div><br></div>"
+    "content": "<div>const col1 = document.querySelector('.TableHeading')?.innerText || '';</div><div>const col2 = document.querySelector('.TableHeading2')?.innerText || '';</div><div>const col3 = document.querySelector('.ColRow')?.innerText || '';</div><div><br></div><div>// Combine and copy to clipboard for Excel</div><div>const rowData = [col1, col2, col3].join('\\t');</div><div>console.log(rowData);</div><div>copy(rowData);</div><div><br></div>"
   },
   {
     "id": 1789447776635,
