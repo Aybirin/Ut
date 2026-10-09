@@ -7,7 +7,7 @@
   {
     "id": 1788930060340,
     "title": "jh",
-    "content": "<div>const col1 = document.querySelector('.TableHeading')?.innerText || '';</div><div>const col2 = document.querySelector('.TableHeading2')?.innerText || '';</div><div>const col3 = document.querySelector('.ColRow')?.innerText || '';</div><div><br></div><div>// Combine and copy to clipboard for Excel</div><div>const rowData = [col1, col2, col3].join('\\t');</div><div>console.log(rowData);</div><div>copy(rowData);</div><div><br></div>"
+    "content": "<div>const col1 = document.querySelector('.TableHeading')?.innerText || '';</div><div>const col2 = document.querySelector('.TableHeading2')?.innerText || '';</div><div><div>const col3 = document.querySelector('#publicationTable .ColRow')?.innerText || '';</div></div><div><br></div><div><br></div><div>// Combine and copy to clipboard for Excel</div><div>const rowData = [col1, col2, col3].join('\\t');</div><div>console.log(rowData);</div><div>copy(rowData);</div><div><br></div>"
   },
   {
     "id": 1789447776635,
