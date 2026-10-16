@@ -624,6 +624,11 @@ const timeCols = [1, 2, 4, 5];
 let activeCell = null;
 let currentCalcFormat = 'hm';
 
+// Undo / Redo Stacks
+let undoStack = [];
+let redoStack = [];
+let isUndoRedoAction = false;
+
 let editState = {
     row: null,
     col: null,
@@ -832,6 +837,7 @@ attachCellClickListeners();
 
 function addSubRow(row, inCol, event) {
     if (event) event.stopPropagation();
+    pushStateToUndo();
 
     const outCol = inCol + 1;
     const inContainer = document.getElementById(`container-${row}-${inCol}`);
@@ -866,6 +872,7 @@ function addSubRow(row, inCol, event) {
 
 function removeSubRow(row, inCol, subIdx, event) {
     if (event) event.stopPropagation();
+    pushStateToUndo();
 
     saveAndCloseActive();
 
@@ -1007,10 +1014,27 @@ nativeTimeInput.addEventListener('blur', () => {
 });
 
 /* =========================================================
-   KEYBOARD NAVIGATION
+   KEYBOARD NAVIGATION & SHORTCUTS
    ========================================================= */
 
 document.addEventListener('keydown', e => {
+    // CTRL + Z (Undo) / CTRL + Y or CTRL + SHIFT + Z (Redo)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+            redo();
+        } else {
+            undo();
+        }
+        return;
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redo();
+        return;
+    }
+
     if (!activeCell) return;
 
     /* TAB */
@@ -1033,8 +1057,15 @@ document.addEventListener('keydown', e => {
         return;
     }
 
-    /* DELETE / BACKSPACE */
-    if (e.key === 'Backspace' || e.key === 'Delete') {
+    /* DELETE: Clear active cell content entirely */
+    if (e.key === 'Delete') {
+        e.preventDefault();
+        clearActiveCellContent();
+        return;
+    }
+
+    /* BACKSPACE: Preserve original editing step navigation */
+    if (e.key === 'Backspace') {
         e.preventDefault();
         handleDelete();
         return;
@@ -1385,17 +1416,17 @@ function autoAdjustAmPmForTimeOut() {
 
         if (isNaN(hVal) || hVal < 1 || hVal > 12) return;
 
-        let testMins = timeToMinutes(`${String(hVal).padStart(2, '0')}:${String(mVal).padStart(2, '0')} ${editState.ampm}`);
-        if (testMins === null) return;
+        let testAmMins = timeToMinutes(`${String(hVal).padStart(2, '0')}:${String(mVal).padStart(2, '0')} AM`);
+        let diffAm = testAmMins - inMins;
 
-        let diff = testMins - inMins;
-
-        if (diff < 0 || diff > 720) {
-            editState.ampm = editState.ampm === 'AM' ? 'PM' : 'AM';
+        if (diffAm < 0 || diffAm > 720) {
+            editState.ampm = 'PM';
+        } else {
+            editState.ampm = 'AM';
         }
     } 
 
-    // FOR PM SECTION (Col 4: In, Col 5: Out) -> Adjust Time In (Col 4)
+    // FOR PM SECTION (Col 4: In, Col 5: Out) -> Adjust Time In (Col 4) while editing Col 4
     else if (editState.col === 4) {
         const outCol = 5;
         const outVal = localStorage.getItem(`dtr_time_${editState.row}_${outCol}_${editState.subIndex}`);
@@ -1409,13 +1440,41 @@ function autoAdjustAmPmForTimeOut() {
 
         if (isNaN(hVal) || hVal < 1 || hVal > 12) return;
 
-        let testMins = timeToMinutes(`${String(hVal).padStart(2, '0')}:${String(mVal).padStart(2, '0')} ${editState.ampm}`);
-        if (testMins === null) return;
+        let testPmMins = timeToMinutes(`${String(hVal).padStart(2, '0')}:${String(mVal).padStart(2, '0')} PM`);
+        let diffPm = outMins - testPmMins;
 
-        let diff = outMins - testMins;
+        if (diffPm < 0 || diffPm > 720) {
+            editState.ampm = 'AM';
+        } else {
+            editState.ampm = 'PM';
+        }
+    }
+}
 
-        if (diff < 0 || diff > 720) {
-            editState.ampm = editState.ampm === 'PM' ? 'AM' : 'PM';
+// HELPER: Retroactively fix Column 4 (Time In) after saving Column 5 (Time Out)
+function adjustCol4AfterCol5Save(row, sub) {
+    const inStr = localStorage.getItem(`dtr_time_${row}_4_${sub}`);
+    const outStr = localStorage.getItem(`dtr_time_${row}_5_${sub}`);
+
+    if (!inStr || inStr.includes('_') || !outStr || outStr.includes('_')) return;
+
+    const inMins = timeToMinutes(inStr);
+    const outMins = timeToMinutes(outStr);
+
+    if (inMins === null || outMins === null) return;
+
+    // If Time Out is earlier than Time In (e.g. 11:45 PM In vs 4:00 PM Out)
+    if (outMins < inMins) {
+        const parts = inStr.split(' ');
+        if (parts[1] === 'PM') {
+            const updatedIn = `${parts[0]} AM`;
+            localStorage.setItem(`dtr_time_${row}_4_${sub}`, updatedIn);
+
+            const inCell = getCell(row, 4, sub);
+            if (inCell) {
+                const removeBtnHtml = (sub > 0) ? `<button class="btn-remove-row" title="Remove entry" onclick="removeSubRow(${row}, 4, ${sub}, event)">-</button>` : '';
+                inCell.innerHTML = `${updatedIn} ${removeBtnHtml}`;
+            }
         }
     }
 }
@@ -1595,7 +1654,12 @@ function saveAndCloseActive() {
 
     activeCell.innerHTML = `${formattedTime} ${removeBtnHtml}`;
 
+    pushStateToUndo();
     localStorage.setItem(`dtr_time_${row}_${col}_${sub}`, formattedTime);
+
+    if (col === 5) {
+        adjustCol4AfterCol5Save(row, sub);
+    }
 
     calculateRow(row);
 
@@ -2082,6 +2146,146 @@ confirmDownloadBtn.addEventListener('click', () => {
         console.error(err);
     });
 });
+
+/* =========================================================
+   UNDO / REDO LOGIC & STATE MANAGEMENT
+   ========================================================= */
+
+function getTableStateSnapshot() {
+    const snapshot = {};
+    for (let i = 1; i <= totalRows; i++) {
+        timeCols.forEach(col => {
+            for (let s = 0; s < 5; s++) {
+                const key = `dtr_time_${i}_${col}_${s}`;
+                const val = localStorage.getItem(key);
+                if (val !== null) {
+                    snapshot[key] = val;
+                }
+            }
+        });
+    }
+    return snapshot;
+}
+
+function pushStateToUndo() {
+    if (isUndoRedoAction) return;
+    const currentState = getTableStateSnapshot();
+    undoStack.push(currentState);
+    if (undoStack.length > 50) { // Limit stack to 50 steps
+        undoStack.shift();
+    }
+    redoStack = []; // Clear redo stack on new edit
+}
+
+function restoreTableState(state) {
+    isUndoRedoAction = true;
+
+    // Clear current localStorage time entries
+    for (let i = 1; i <= totalRows; i++) {
+        timeCols.forEach(col => {
+            for (let s = 0; s < 5; s++) {
+                localStorage.removeItem(`dtr_time_${i}_${col}_${s}`);
+            }
+        });
+    }
+
+    // Restore state items to localStorage
+    Object.keys(state).forEach(key => {
+        localStorage.setItem(key, state[key]);
+    });
+
+    // Re-render sub-rows and cell contents
+    for (let i = 1; i <= totalRows; i++) {
+        [1, 4].forEach(inCol => {
+            const outCol = inCol + 1;
+            const inContainer = document.getElementById(`container-${i}-${inCol}`);
+            const outContainer = document.getElementById(`container-${i}-${outCol}`);
+            const defaultAmpm = (inCol === 4) ? 'PM' : 'AM';
+
+            inContainer.innerHTML = `<button class="btn-add-row" title="Add entry" onclick="addSubRow(${i}, ${inCol}, event)">+</button>`;
+            outContainer.innerHTML = '';
+
+            let maxSub = 0;
+            for (let s = 0; s < 5; s++) {
+                if (localStorage.getItem(`dtr_time_${i}_${inCol}_${s}`) || localStorage.getItem(`dtr_time_${i}_${outCol}_${s}`)) {
+                    maxSub = s;
+                }
+            }
+
+            for (let s = 0; s <= maxSub; s++) {
+                const newIn = document.createElement('div');
+                newIn.className = 'time-entry-row';
+                newIn.dataset.row = i;
+                newIn.dataset.col = inCol;
+                newIn.dataset.sub = s;
+
+                const removeBtn = s > 0 ? `<button class="btn-remove-row" title="Remove entry" onclick="removeSubRow(${i}, ${inCol}, ${s}, event)">-</button>` : '';
+                const savedIn = localStorage.getItem(`dtr_time_${i}_${inCol}_${s}`);
+                newIn.innerHTML = `${savedIn || `_:_ ${defaultAmpm}`} ${removeBtn}`;
+
+                const newOut = document.createElement('div');
+                newOut.className = 'time-entry-row';
+                newOut.dataset.row = i;
+                newOut.dataset.col = outCol;
+                newOut.dataset.sub = s;
+                const savedOut = localStorage.getItem(`dtr_time_${i}_${outCol}_${s}`);
+                newOut.innerHTML = savedOut || `_:_ ${defaultAmpm}`;
+
+                inContainer.appendChild(newIn);
+                outContainer.appendChild(newOut);
+            }
+        });
+    }
+
+    attachCellClickListeners();
+    calculateAll();
+    isUndoRedoAction = false;
+}
+
+function undo() {
+    if (undoStack.length === 0) return;
+    if (activeCell) saveAndCloseActive();
+
+    const currentState = getTableStateSnapshot();
+    redoStack.push(currentState);
+
+    const previousState = undoStack.pop();
+    restoreTableState(previousState);
+}
+
+function redo() {
+    if (redoStack.length === 0) return;
+    if (activeCell) saveAndCloseActive();
+
+    const currentState = getTableStateSnapshot();
+    undoStack.push(currentState);
+
+    const nextState = redoStack.pop();
+    restoreTableState(nextState);
+}
+
+function clearActiveCellContent() {
+    if (!activeCell) return;
+
+    pushStateToUndo();
+
+    const row = editState.row;
+    const col = editState.col;
+    const sub = editState.subIndex;
+    const defaultAmpm = (col === 4 || col === 5) ? 'PM' : 'AM';
+    const removeBtnHtml = renderRemoveButton();
+
+    activeCell.innerHTML = `_:_ ${defaultAmpm} ${removeBtnHtml}`;
+    localStorage.removeItem(`dtr_time_${row}_${col}_${sub}`);
+
+    editState.hour = '';
+    editState.min = '';
+    editState.originalValue = null;
+    editState.hasTyped = false;
+
+    calculateRow(row);
+    saveAndCloseActive();
+}
 
 </script>
 
