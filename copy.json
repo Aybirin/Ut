@@ -47,7 +47,7 @@
   {
     "id": 1791504502321,
     "title": "lrc",
-    "content": "http://10.16.0.63:8081/district/servlet/presentlistsitesform.do;jsessionid=610CC8DA6936015E6792391024901259?districtMode=true<div>172.30.14.89:8080/lrcv2/</div><div><br></div>"
+    "content": "http://10.16.0.63:8081/district/servlet/presentlistsitesform.do;jsessionid=610CC8DA6936015E6792391024901259?districtMode=true<div>http172.30.14.89:8080/lrcv2/</div><div><br></div>"
   },
   {
     "id": 1791859911583,
