@@ -1,0 +1,77 @@
+DyDj3 — Findings Log (F5)
+Updated: 2026-11-06
+
+Purpose
+Continue the minimalist English Android catalog implementation in DyDj3. F1 is related context; F2–F4 provide implementation/investigation context, with F4 the latest prior update. Keep this log cumulative and evidence-led.
+
+Prior established findings (from F3/F4 context)
+- Original APK is Flutter AOT; package com.android.fbmk.zchlpb; app v1.0.3; Dart 3.6.2 ARM64.
+- Catalog routes identified in AOT: /movie/navBlock, /movie/blockDetail, /movie/navFilter, /movie/rank, /search/home, /search/movie.
+- Candidate gateway map from exact AOT literal:
+  china_1 https://api.bl310f9.com
+  china_2 https://api.hl5a50l.com
+  china_3 https://api.k59y4n.com
+  oversea_1 https://api.g52wut.com
+  oversea_2 https://api.k58twxwz.com
+  oversea_3 https://api.kslf5sh.com
+- api.g52wut.com is the leading catalog host candidate. Earlier F4 PCAPdroid observations showed two encrypted HTTPS connections to that SNI.
+- /im-sdk-api-router/api/config.e is likely IM/chat infrastructure, not an established catalog prerequisite. Do not port it without direct catalog evidence.
+- Exact catalog HTTP method/body, route prefix, headers/auth/signature, response schema, pagination, and CDN semantics remain unverified.
+- CatalogRepository has best-effort candidate handling, root object/array support, field aliases, URL normalization, block-level failure isolation, bounded/sanitized diagnostics. These guesses are not protocol confirmation.
+- Full Android/Gradle build and live device catalog verification have not been completed in the available environment.
+
+New evidence: user-provided /mnt/data/catalog_traffic.pcapng
+- Parsed the uploaded 31,320-byte PCAPNG directly. It contains 39 Enhanced Packet Blocks, one Ethernet interface, and three TCP flows; no DNS packets or plaintext HTTP requests/responses were present in this capture.
+- All three flows originate from local phone address 192.168.137.73 and connect to 65.8.76.106:443.
+- Each flow's TLS ClientHello contains SNI api.g52wut.com.
+- Flow 1: phone source port 32940; observed 2026-11-06 05:50:33–05:50:41 UTC; TCP payload totals 2,425 bytes phone→server and 7,821 bytes server→phone.
+- Flow 2: phone source port 47814; observed 2026-11-06 05:50:41–05:50:46 UTC; TCP payload totals 1,841 bytes phone→server and 8,984 bytes server→phone.
+- Flow 3: phone source port 38010; observed 2026-11-06 05:51:01–05:51:02 UTC; TCP payload totals 950 bytes phone→server and 4,971 bytes server→phone.
+- TLS handshakes and encrypted application-data records are visible. The captured payloads after handshake are encrypted; no HTTP path, method, headers, query/body, response JSON, or catalog record fields can be recovered from this file alone.
+- This independently reinforces api.g52wut.com as an active host during the captured startup/catalog session, and shows three distinct TLS sessions to the same IP/SNI. It does NOT establish which flow is startup, navBlock, blockDetail, or another endpoint. Connection sizes/timing are not sufficient to map those calls.
+- Destination IP 65.8.76.106 differs from the two destination IPs noted in prior F4 PCAPdroid evidence (65.8.76.93 and 65.8.76.96); same SNI is consistent with CDN/load-balancing variation, but that explanation is inference, not proven by this capture.
+
+Next evidence needed
+- Best next artifact is an authorized redacted HTTP transaction export (request + response) from a supported debugging environment, or official/debug API documentation. Keep credentials/cookies/tokens redacted. Do not bypass certificate pinning, anti-tamper, or app protections.
+- If only encrypted packet capture is available, collect a tightly segmented capture per action (startup idle, open catalog, select one category, open one block) with timestamps. This may help correlate flows but will not reveal HTTPS paths or JSON by itself.
+
+Implementation gate
+Do not change request method/body, auth/signing, headers, route prefix, or parser mappings based solely on SNI, byte counts, or timing. Treat api.g52wut.com as strongly supported host evidence, not as a complete API contract.
+
+7. TLS SESSION-SECRET VERIFICATION — catalog_traffic.pcapng
+---------------------------------------------------------
+User asked whether the supplied capture contains TLS session secrets. The exact
+file was re-inspected directly (31,320 bytes; PCAPNG version 1.0).
+
+Verified PCAPNG block inventory:
+- Section Header Block: 1
+- Interface Description Block: 1
+- Interface Statistics Block: 1
+- Enhanced Packet Blocks: 39
+- Decryption Secrets Blocks (block type 0x0000000A): 0
+
+A PCAPNG Decryption Secrets Block is the standard container used to embed
+secrets such as TLS key-log material. No such block exists in this capture.
+Additional byte-string checks found no occurrences of TLSK, CLIENT_RANDOM,
+CLIENT_HANDSHAKE_TRAFFIC_SECRET, SERVER_HANDSHAKE_TRAFFIC_SECRET,
+EXPORTER_SECRET, or KEYLOG. These string checks are corroborative only; the
+zero Decryption Secrets Block count is the decisive PCAPNG-format check.
+
+Conclusion:
+- CONFIRMED: this PCAPNG does not contain embedded TLS decryption secrets.
+- The file contains encrypted TLS packet records, not the session keys needed
+to decrypt them in Wireshark.
+- A separately saved, matching TLS key-log file was not included among the
+provided artifacts. Therefore, the recent capture cannot currently be decrypted
+from the supplied file(s).
+- This does not prove decryption is impossible in principle. It means the
+necessary session secrets are absent from this capture. A future capture would
+need to be made in an authorized environment that can export the matching TLS
+session secrets or decrypted HTTP transactions.
+- The absence of embedded secrets does not itself prove certificate pinning.
+F3/F4 separately document pinning-related strings and the user's failed
+PCAPdroid TLS/MITM attempt; pinning remains a plausible explanation, not a
+confirmed cause for every catalog connection.
+
+No changes were made to DyDj3's API protocol assumptions based on this check.
+The catalog request/response contract remains unresolved.
